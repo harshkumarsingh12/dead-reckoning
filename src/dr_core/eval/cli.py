@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
                 st = eskf.state
                 t_list.append(st.t_ns)
                 p_list.append([float(st.p_world[0]), float(st.p_world[1])])
-                psi_list.append(float(st.psi_rad))
+                psi_list.append(st.psi_rad)
             elif rec_type == "gps" and isinstance(payload, GpsFix):
                 if not args.no_gps:
                     eskf.update_gps(payload)

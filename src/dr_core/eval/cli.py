@@ -65,7 +65,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: no such recording: {args.recording}", file=sys.stderr)
         return EXIT_USAGE
 
-    raise NotImplementedError("M0 -- owner: Sikruti (wire up run_eval)")
+    try:
+        from dr_core.io.session import SessionReader
+
+        reader = SessionReader(args.recording)
+        # SessionReader is owned by Sristee. If not implemented, catch and report cleanly.
+        _ = reader.meta
+    except NotImplementedError as e:
+        print(
+            f"dr-eval: unable to load session -- SessionReader is pending ({e})",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+    except Exception as e:
+        print(f"dr-eval error: {e}", file=sys.stderr)
+        return EXIT_USAGE
+
+    raise NotImplementedError("M0 -- owner: Sikruti (full run_eval pipeline with models)")
 
 
 if __name__ == "__main__":  # pragma: no cover

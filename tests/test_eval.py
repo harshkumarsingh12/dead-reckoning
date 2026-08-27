@@ -20,26 +20,22 @@ def _line(n: int = 100, step: float = 1.0, label: str = "x") -> Trajectory:
     return Trajectory(t_ns=t, p_world=p, label=label)
 
 
-@pytest.mark.xfail(reason="M0 -- ATE unimplemented (owner: Sikruti)", strict=True)
 def test_ate_of_a_trajectory_against_itself_is_zero() -> None:
     traj = _line()
     assert ate(traj, traj) == pytest.approx(0.0, abs=1e-9)
 
 
-@pytest.mark.xfail(reason="M0 -- RTE unimplemented (owner: Sikruti)", strict=True)
 def test_rte_is_zero_for_a_perfect_estimate() -> None:
     traj = _line()
     assert rte(traj, traj, window_s=1.0) == pytest.approx(0.0, abs=1e-9)
 
 
-@pytest.mark.xfail(reason="M0 -- final_error unimplemented (owner: Sikruti)", strict=True)
 def test_final_error_measures_the_endpoint_gap() -> None:
     truth = _line(label="truth")
     est = Trajectory(t_ns=truth.t_ns, p_world=truth.p_world + np.array([3.0, 4.0]), label="est")
     assert final_error(est, truth) == pytest.approx(5.0)
 
 
-@pytest.mark.xfail(reason="M0 -- drift_pct unimplemented (owner: Sikruti)", strict=True)
 def test_drift_pct_is_final_error_over_distance() -> None:
     """The headline number. 5 m off after a 100 m walk is 5%."""
     truth = _line(n=101, step=1.0, label="truth")  # 100 m travelled

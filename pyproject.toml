@@ -15,7 +15,7 @@ authors = [{ name = "SIH26168 Team" }]
 requires-python = ">=3.11,<3.12"
 
 dependencies = [
-    "numpy>=1.26,<2.1",
+    "numpy>=1.26,<2.5",
     "scipy>=1.11",
     "pandas>=2.1",
     "matplotlib>=3.8",

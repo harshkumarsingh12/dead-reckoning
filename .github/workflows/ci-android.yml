@@ -34,7 +34,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Committed from Windows the wrapper lands as mode 100644 and Linux refuses it.
       # Fixed permanently with `git update-index --chmod=+x apps/android/gradlew`;

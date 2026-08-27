@@ -19,6 +19,10 @@ jobs:
   title:
     name: Conventional PR title
     runs-on: ubuntu-latest
+    # Dependabot writes its own titles ("chore: Update numpy requirement from ...")
+    # and they are capitalised. The rule is for humans; exempting the bot is cheaper
+    # and clearer than loosening the pattern for everyone.
+    if: github.actor != 'dependabot[bot]'
     steps:
       # Squash-merge uses the PR title as the commit message, so this is what actually
       # decides whether the history reads well. A clean progressive history is scored.

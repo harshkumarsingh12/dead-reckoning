@@ -39,7 +39,6 @@ def test_default_lag_is_300_ms() -> None:
 # ------------------------------------------------------------ the M0 ledger
 
 
-@pytest.mark.xfail(reason="M0 -- estimate_offset unimplemented (owner: Sristee)", strict=True)
 def test_offset_estimation_recovers_a_known_shift() -> None:
     true_offset = 1_700_000_000 * NS_PER_S
     boot = [i * 100_000_000 for i in range(20)]
@@ -48,7 +47,6 @@ def test_offset_estimation_recovers_a_known_shift() -> None:
     assert mapper.offset_ns == pytest.approx(true_offset, abs=1_000_000)
 
 
-@pytest.mark.xfail(reason="M0 -- ReorderBuffer unimplemented (owner: Sristee)", strict=True)
 def test_reorder_buffer_releases_in_capture_order() -> None:
     """Measurements pushed out of order come out in order.
 
@@ -63,7 +61,6 @@ def test_reorder_buffer_releases_in_capture_order() -> None:
     assert [item for _t, item in released] == ["imu_a", "imu_b", "gps_late"]
 
 
-@pytest.mark.xfail(reason="M0 -- ReorderBuffer unimplemented (owner: Sristee)", strict=True)
 def test_reorder_buffer_holds_back_the_lag_window() -> None:
     """Nothing inside the lag window is released -- something later may still arrive."""
     buf: ReorderBuffer[str] = ReorderBuffer(lag_ns=DEFAULT_LAG_NS)
@@ -71,7 +68,6 @@ def test_reorder_buffer_holds_back_the_lag_window() -> None:
     assert buf.drain(now_ns=1_000_000_000) == []
 
 
-@pytest.mark.xfail(reason="M0 -- ReorderBuffer unimplemented (owner: Sristee)", strict=True)
 def test_reorder_buffer_rejects_a_measurement_that_is_already_too_late() -> None:
     """Loudly, not silently. A dropped late measurement is a real timing bug and
     swallowing it here is how it stays undiagnosed until demo day."""

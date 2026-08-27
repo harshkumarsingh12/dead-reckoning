@@ -26,6 +26,7 @@ body {
 }
 
 .app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -169,4 +170,103 @@ body {
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   color: var(--color-surface);
+}
+
+/* ------------------------------------------------------------- post-run panel */
+
+.post-run-panel {
+  position: absolute;
+  inset: var(--space-lg);
+  overflow-y: auto;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  padding: var(--space-lg);
+  z-index: 20;
+}
+
+.post-run-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+.post-run-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.post-run-dismiss {
+  border: 1px solid var(--color-muted);
+  background: transparent;
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.post-run-dismiss:hover {
+  background: color-mix(in srgb, var(--color-muted) 15%, transparent);
+}
+
+.report-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.report-stat {
+  display: flex;
+  flex-direction: column;
+}
+.report-stat-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-baselines {
+  margin-bottom: var(--space-md);
+}
+.report-baseline-list {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-xs);
+}
+
+.report-nis-summary {
+  margin-bottom: var(--space-lg);
+}
+
+.report-plots {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+}
+
+.report-plot {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--color-muted) 30%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+}
+.report-plot img {
+  width: 100%;
+  display: block;
+  border-radius: var(--radius-sm);
+}
+.report-plot figcaption {
+  margin-top: var(--space-xs);
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.report-notes {
+  margin-top: var(--space-md);
+  color: var(--color-muted);
+  font-size: 0.9rem;
 }

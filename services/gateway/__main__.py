@@ -24,10 +24,16 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--tiles", type=Path, default=None, help="path to .mbtiles")
     parser.add_argument("--model", type=Path, default=None, help="path to .onnx")
+    parser.add_argument(
+        "--reports",
+        type=Path,
+        default=None,
+        help="directory of dr-eval report.json/plot output, served at /reports",
+    )
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
 
-    app = create_app(tiles_path=args.tiles, model_path=args.model)
+    app = create_app(tiles_path=args.tiles, model_path=args.model, reports_dir=args.reports)
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 

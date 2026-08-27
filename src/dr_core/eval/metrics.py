@@ -46,7 +46,9 @@ def resample_to(trajectory: Trajectory, t_ns: npt.NDArray[Any]) -> Trajectory:
 
     psi_rad: FloatArray | None = None
     if trajectory.psi_rad is not None:
-        psi_rad = np.asarray(np.interp(dst_t, src_t, trajectory.psi_rad), dtype=np.float64)
+        psi_unwrapped = np.unwrap(trajectory.psi_rad)
+        psi_interp = np.interp(dst_t, src_t, psi_unwrapped)
+        psi_rad = np.asarray((psi_interp + np.pi) % (2.0 * np.pi) - np.pi, dtype=np.float64)
 
     return Trajectory(
         t_ns=np.asarray(t_ns, dtype=np.int64),
@@ -151,7 +153,7 @@ def drift_pct(estimate: Trajectory, truth: Trajectory) -> float:
     distance = float(np.sum(np.linalg.norm(diffs, axis=1)))
     if distance < 1e-9:
         return 0.0
-    fe = final_error(estimate, truth)
+    fe = float(np.linalg.norm(estimate.p_world[-1] - truth_r.p_world[-1]))
     return (fe / distance) * 100.0
 
 

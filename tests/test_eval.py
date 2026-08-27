@@ -5,6 +5,8 @@ Spec: docs/BUILD_PLAN.md section 8  |  OWNER: Sikruti / Sumedha  |  MILESTONE: M
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -41,6 +43,54 @@ def test_drift_pct_is_final_error_over_distance() -> None:
     truth = _line(n=101, step=1.0, label="truth")  # 100 m travelled
     est = Trajectory(t_ns=truth.t_ns, p_world=truth.p_world + np.array([5.0, 0.0]), label="est")
     assert drift_pct(est, truth) == pytest.approx(5.0, rel=0.02)
+
+
+def test_resample_to_handles_angle_wrapping() -> None:
+    """Interpolating an angle crossing the +/-pi boundary must not swing through zero."""
+    from dr_core.eval.metrics import resample_to
+
+    # Trajectory going from 3.0 rad to -3.0 rad (turning across pi)
+    t = np.array([0, 1_000_000_000], dtype=np.int64)
+    p = np.zeros((2, 2), dtype=np.float64)
+    psi = np.array([3.0, -3.0], dtype=np.float64)
+    traj = Trajectory(t_ns=t, p_world=p, psi_rad=psi)
+
+    # Resample at midpoint t = 0.5s
+    t_mid = np.array([500_000_000], dtype=np.int64)
+    res = resample_to(traj, t_mid)
+    assert res.psi_rad is not None
+    # Midpoint of 3.0 and -3.0 wrapping across pi should be near pi or -pi (~3.14159), not 0.0
+    assert abs(res.psi_rad[0]) > 3.0
+
+
+def test_generate_report_and_cli(tmp_path: Path) -> None:
+    from dr_core.eval.cli import EXIT_USAGE, main
+    from dr_core.eval.report import generate_report
+    from dr_core.fusion.gating import NisLogger
+
+    truth = _line(n=10, step=1.0, label="truth")
+    est = Trajectory(t_ns=truth.t_ns, p_world=truth.p_world + 0.1, label="est")
+    logger = NisLogger({"velocity": 2})
+    logger.record("velocity", 2.0, accepted=True)
+
+    report = generate_report(
+        estimate=est,
+        truth=truth,
+        baselines={},
+        output_dir=tmp_path,
+        run_id="test_run",
+        nis_logger=logger,
+    )
+    assert (tmp_path / "trajectory.png").exists()
+    assert (tmp_path / "error_time.png").exists()
+    assert (tmp_path / "error_cdf.png").exists()
+    assert (tmp_path / "nis.png").exists()
+    assert (tmp_path / "report.json").exists()
+    assert report.drift_pct >= 0.0
+
+    # Test CLI missing file handling
+    code = main(["non_existent_file.jsonl.gz"])
+    assert code == EXIT_USAGE
 
 
 @pytest.mark.xfail(reason="M2 -- coverage test unimplemented (owner: Sumedha)", strict=True)

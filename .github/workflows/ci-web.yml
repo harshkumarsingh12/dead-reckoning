@@ -55,7 +55,7 @@ jobs:
           fi
           echo "Offline-safe: no external tile hosts in the bundle."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: apps/web/dist

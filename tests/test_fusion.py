@@ -18,7 +18,6 @@ from dr_core.types import ImuSample
 pytestmark = pytest.mark.gating
 
 
-@pytest.mark.xfail(reason="M3 -- ESKF unimplemented (owner: Sikruti)", strict=True)
 def test_ten_second_stop_produces_zero_position_creep(stationary: list[ImuSample]) -> None:
     """Standing still for 10 s must not move the estimate.
 
@@ -38,7 +37,6 @@ def test_ten_second_stop_produces_zero_position_creep(stationary: list[ImuSample
     assert creep < 0.1, f"crept {creep:.3f} m while standing still"
 
 
-@pytest.mark.xfail(reason="M3 -- ZARU unimplemented (owner: Sikruti)", strict=True)
 def test_zaru_converges_the_gyro_bias(stationary: list[ImuSample]) -> None:
     """A stationary phone pins the yaw bias, so heading stops drifting for free."""
     eskf = Eskf()
@@ -50,7 +48,6 @@ def test_zaru_converges_the_gyro_bias(stationary: list[ImuSample]) -> None:
     assert abs(eskf.state.gyro_bias_z) < 0.01
 
 
-@pytest.mark.xfail(reason="M3 -- velocity update unimplemented (owner: Sikruti)", strict=True)
 def test_device_frame_velocity_update_corrects_heading() -> None:
     """The single most important wiring decision in the filter (build plan 7.1).
 
@@ -76,7 +73,6 @@ def test_device_frame_velocity_update_corrects_heading() -> None:
     assert abs(eskf.state.psi_rad - truth_psi) < 0.1
 
 
-@pytest.mark.xfail(reason="M3 -- gate unimplemented (owner: Sikruti)", strict=True)
 def test_chi_square_gate_rejects_an_injected_outlier() -> None:
     """Outlier injection (build plan section 9). A wild innovation must be rejected and
     must still show up in the NIS log -- a silently dropped measurement teaches nobody
@@ -89,7 +85,6 @@ def test_chi_square_gate_rejects_an_injected_outlier() -> None:
     assert nis_bad > nis_good
 
 
-@pytest.mark.xfail(reason="M0 -- NisLogger unimplemented (owner: Sikruti)", strict=True)
 def test_nis_logger_reports_per_channel_consistency() -> None:
     """A consistent filter has mean NIS near the channel's degrees of freedom."""
     logger = NisLogger({"velocity": 2, "heading": 1})
@@ -100,7 +95,6 @@ def test_nis_logger_reports_per_channel_consistency() -> None:
     assert logger.is_consistent() == {"velocity": True, "heading": True}
 
 
-@pytest.mark.xfail(reason="M3 -- scale state unimplemented (owner: Sikruti)", strict=True)
 def test_velocity_scale_freezes_when_gps_drops() -> None:
     """Scale and speed are not separable without GPS (build plan 7.2).
 

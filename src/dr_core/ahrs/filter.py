@@ -46,26 +46,25 @@ class AhrsFilter:
         self._apply_enu_settings()
 
     def _apply_enu_settings(self) -> None:
-        """Configure the world frame as ENU (x East, y North, z Up).
+        """Configure imufusion: ENU world frame plus explicit rejection settings.
 
-        The ``AhrsSettings`` constructor arity varies across ``imufusion`` builds, so we
-        try the known signatures and fall back to the library default. ENU and the
-        default NWU are both z-up, which is all the gravity-removal path depends on; the
-        convention only changes the heading zero, verified by the turn tests.
+        Set by attribute assignment, not the positional constructor: in imufusion 1.3.2
+        the positional form takes ``sample_rate`` first and silently drops ``convention``.
+        There is deliberately no try/except -- if a future imufusion renames a field this
+        must fail loudly rather than fall back to library defaults. That silent fallback
+        was the prior bug: a wrong-order positional call raised and was swallowed, so the
+        filter ran on NWU with acceleration_rejection disabled (90 deg).
         """
-        conv = imufusion.CONVENTION_ENU
-        recovery = int(5 * self._rate_hz)
-        for args in (
-            (conv, 0.5, 2000, 10, 10, recovery),
-            (conv, 0.5, 2000.0, 10.0, 10.0, recovery),
-            (conv, 0.5, 10.0, 10.0, recovery),
-            (conv, 0.5),
-        ):
-            try:
-                self._ahrs.set_settings(imufusion.AhrsSettings(*args))
-                return
-            except (TypeError, ValueError):
-                continue
+        settings = imufusion.AhrsSettings()
+        settings.sample_rate = self._rate_hz
+        settings.convention = imufusion.CONVENTION_ENU
+        settings.gain = 0.5
+        settings.gyroscope_range = 2000.0  # deg/s, typical MEMS full scale
+        settings.acceleration_rejection = 10.0  # deg: distrust accel as a gravity
+        settings.magnetic_rejection = 10.0  # deg  reference when it deviates beyond this
+        settings.rejection_timeout = 5.0  # s before a rejected sensor is trusted again
+        self._ahrs.set_settings(settings)
+        self._settings = settings
 
     def update(self, sample: ImuSample) -> OrientationEstimate:
         """Advance the filter by one sample and return the current orientation.

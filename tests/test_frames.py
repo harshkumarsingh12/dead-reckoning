@@ -54,7 +54,11 @@ def test_straight_line_travels_the_expected_distance(
     assert abs(p[1]) < 1.0
 
 
-@pytest.mark.xfail(reason="M1 -- AHRS + integration unimplemented (owner: Sristee)", strict=True)
+@pytest.mark.xfail(
+    reason="M2/M3 -- loop closure needs a velocity estimate (learned model / ESKF); the "
+    "raw integrator starts from rest while this motion begins at 1.4 m/s (owner: Sristee)",
+    strict=True,
+)
 def test_pure_turn_closes_the_circle(pure_turn: tuple[list[ImuSample], Trajectory]) -> None:
     """One full lap of a 20 m circle returns to the start.
 

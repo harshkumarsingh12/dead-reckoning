@@ -11,6 +11,7 @@ export default defineConfig({
       // the proxy here means the production build uses plain relative paths and
       // cannot accidentally acquire an external host. See docs/DEMO_RUNBOOK.md.
       '/tiles': 'http://127.0.0.1:8000',
+      '/reports': 'http://127.0.0.1:8000',
       '/live': { target: 'ws://127.0.0.1:8000', ws: true },
       '/control': 'http://127.0.0.1:8000',
     },

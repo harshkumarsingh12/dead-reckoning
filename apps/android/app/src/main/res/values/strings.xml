@@ -5,4 +5,15 @@
     <string name="calibrate">Calibrate</string>
     <string name="mark_event">Mark event</string>
     <string name="server_hint">ws://192.168.43.1:8000/ingest</string>
+
+    <string name="permission_denied">Location permission is required to stream GPS fixes</string>
+    <string name="enter_server_url">Enter the gateway address first</string>
+    <string name="start_before_calibrating">Start streaming before calibrating</string>
+    <string name="calib_hold_still">Hold the phone still…</string>
+    <string name="calib_figure_eight">Now sweep a figure-8…</string>
+    <string name="calib_tap_now">Tap the phone firmly now</string>
+    <string name="calib_done">Calibration markers sent</string>
+    <string name="status_connected">Connected — streaming</string>
+    <string name="status_reconnecting">Reconnecting…</string>
+    <string name="status_rate">Streaming — %1$.1f Hz</string>
 </resources>

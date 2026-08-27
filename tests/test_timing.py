@@ -39,7 +39,6 @@ def test_default_lag_is_300_ms() -> None:
 # ------------------------------------------------------------ the M0 ledger
 
 
-@pytest.mark.xfail(reason="M0 -- estimate_offset unimplemented (owner: Sristee)", strict=True)
 def test_offset_estimation_recovers_a_known_shift() -> None:
     true_offset = 1_700_000_000 * NS_PER_S
     boot = [i * 100_000_000 for i in range(20)]

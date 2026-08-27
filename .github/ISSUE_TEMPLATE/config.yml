@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Build plan (the spec)
-    url: https://github.com/harshkumarsingh12/sih26168-dead-reckoning/blob/main/docs/BUILD_PLAN.md
+    url: https://github.com/harshkumarsingh12/dead-reckoning/blob/main/docs/BUILD_PLAN.md
     about: The arbiter. Read the relevant section before filing a design question.
   - name: Conventions — frames, units, clocks
-    url: https://github.com/harshkumarsingh12/sih26168-dead-reckoning/blob/main/docs/CONVENTIONS.md
+    url: https://github.com/harshkumarsingh12/dead-reckoning/blob/main/docs/CONVENTIONS.md
     about: Most "the trajectory is wrong" questions are answered here.

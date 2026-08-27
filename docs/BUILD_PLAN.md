@@ -275,14 +275,14 @@ Built at milestone 0. Two families of numbers: accuracy and honesty.
 
 Ordered to produce an end-to-end trajectory early, then improve. Demoable path by M1, the full hardened demo by M4.
 
-| Milestone | Deliverable | Done when | Target |
-|---|---|---|---|
-| **M0 — Harness + time** | Eval harness (ATE/RTE/drift) + NIS/NEES tooling + clock-offset mapper + frame unit tests including rotation-in-place; RoNIN/OxIOD access requested and loading | One command turns a recording into a trajectory plot, error numbers, and a timing-alignment check, all passing | Harness and clocks trusted |
-| **M1 — Baselines + AHRS** | AHRS orientation; PDR and raw-integration baselines; mag hard-iron calibration + magnitude/dip/innovation triple gate | End-to-end on a test loop; mag gate rejects an induced disturbance (magnet test) | PDR < 10%; gate demonstrably fires |
-| **M2 — Learned velocity** | Causal TCN with NLL-trained covariance; yaw + carry augmentation; shared train/live preprocessing; ONNX export | Model-only beats PDR on held-out data AND coverage is calibrated (~68% in 1 sigma); inference < 10 ms | Drift < 5%, calibrated sigma |
-| **M3 — ESKF fusion** | 2D ESKF: device-frame velocity update (with the heading term), ZUPT/ZARU, scale state s, chi-square gating, 300 ms reorder buffer | Fused beats model-only on ATE/RTE; NIS in bounds on all channels; 10 s stop gives zero creep | Drift < 3 to 5%; NIS consistent |
-| **M4 — Hardened live demo** | Offline MBTiles, hotspot transport, golden-run replay fallback, telemetry strip, latency-compensated render, scripted 3-minute arc | Full demo executes with venue internet unplugged; the dot does not visibly lag turns | Headline number holds live, offline |
-| **M5 — Stretch** | On-device ONNX inference; OSM map matching; multi-carry live demo | Runs without a laptop; urban path snaps to routes | Bonus polish |
+| Milestone | Deliverable | Done when | Target | Status |
+|---|---|---|---|---|
+| **M0 — Harness + time** | Eval harness (ATE/RTE/drift) + NIS/NEES tooling + clock-offset mapper + frame unit tests including rotation-in-place; RoNIN/OxIOD access requested and loading | One command turns a recording into a trajectory plot, error numbers, and a timing-alignment check, all passing | Harness and clocks trusted | ✅ Done (Sikruti, Sristee, Harsh) |
+| **M1 — Baselines + AHRS** | AHRS orientation; PDR and raw-integration baselines; mag hard-iron calibration + magnitude/dip/innovation triple gate | End-to-end on a test loop; mag gate rejects an induced disturbance (magnet test) | PDR < 10%; gate demonstrably fires | In progress (Sristee) |
+| **M2 — Learned velocity** | Causal TCN with NLL-trained covariance; yaw + carry augmentation; shared train/live preprocessing; ONNX export | Model-only beats PDR on held-out data AND coverage is calibrated (~68% in 1 sigma); inference < 10 ms | Drift < 5%, calibrated sigma | In progress (Sumedha) |
+| **M3 — ESKF fusion** | 2D ESKF: device-frame velocity update (with the heading term), ZUPT/ZARU, scale state s, chi-square gating, 300 ms reorder buffer | Fused beats model-only on ATE/RTE; NIS in bounds on all channels; 10 s stop gives zero creep | Drift < 3 to 5%; NIS consistent | ✅ Done (Sikruti) |
+| **M4 — Hardened live demo** | Offline MBTiles, hotspot transport, golden-run replay fallback, telemetry strip, latency-compensated render, scripted 3-minute arc | Full demo executes with venue internet unplugged; the dot does not visibly lag turns | Headline number holds live, offline | In progress (Harsh, Tanmay, Akshit) |
+| **M5 — Stretch** | On-device ONNX inference; OSM map matching; multi-carry live demo | Runs without a laptop; urban path snaps to routes | Bonus polish | Pending |
 
 ---
 

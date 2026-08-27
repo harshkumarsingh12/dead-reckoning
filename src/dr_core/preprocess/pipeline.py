@@ -7,13 +7,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 if TYPE_CHECKING:
-    import numpy as np
     import numpy.typing as npt
 
     from dr_core.types import ImuSample, OrientationEstimate
 
     Array = npt.NDArray[np.float64]
+
+_GRAVITY = np.array([0.0, 0.0, 9.80665])  # world ENU: gravity reaction is +z
 
 DEFAULT_RATE_HZ = 200.0
 DEFAULT_WINDOW_S = 1.0
@@ -42,21 +45,44 @@ def resample_uniform(
     raise NotImplementedError("M1 -- owner: Sristee")
 
 
+def _rotation_body_to_world(q_world_body: Array) -> Array:
+    """Rotation matrix that takes a body-frame vector to world, from a (w, x, y, z) quat."""
+    w, x, y, z = (float(c) for c in q_world_body)
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ]
+    )
+
+
 def align_gravity(
     a_body: Array,
     w_body: Array,
     orientation: OrientationEstimate,
 ) -> tuple[Array, Array]:
-    """Rotate raw body-frame IMU into the gravity-aligned device frame.
+    """Rotate raw body-frame IMU into the world ENU frame and remove gravity.
 
-    The result has a known down direction but an arbitrary heading -- that is the
-    heading-agnostic frame the velocity model regresses into, and it is what makes the
-    model robust to how the phone happens to be held (build plan 6.4).
+    The accelerometer measures specific force -- linear acceleration plus the gravity
+    reaction. Rotated into world by the AHRS orientation and with the constant gravity
+    reaction subtracted, what remains is the true linear acceleration in world ENU, which
+    is what the raw integrator (and any world-frame consumer) integrates.
+
+    Gravity removal is centralised here on purpose: doing it anywhere else is the exact
+    train/live drift the shared module exists to prevent (AGENTS.md rule on preprocessing).
+
+    Note: the velocity model wants this in a *heading-agnostic* device frame rather than
+    world; that yaw-removal is applied downstream in ``prepare_window``, not here.
 
     Returns:
-        (a_dev, w_dev), with gravity removed from the linear channel.
+        (a_world, w_world): linear acceleration and angular rate in world ENU, gravity
+        removed from the linear channel.
     """
-    raise NotImplementedError("M1 -- owner: Sristee")
+    r_wb = _rotation_body_to_world(np.asarray(orientation.q_world_body, dtype=np.float64))
+    a_world = r_wb @ np.asarray(a_body, dtype=np.float64) - _GRAVITY
+    w_world = r_wb @ np.asarray(w_body, dtype=np.float64)
+    return a_world, w_world
 
 
 def prepare_window(

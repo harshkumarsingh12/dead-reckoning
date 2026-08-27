@@ -12,7 +12,7 @@ Two families, and both are reported every run:
   * Honesty  -- NIS, NEES, model calibration coverage.
 """
 
-from dr_core.eval.metrics import ate, drift_pct, final_error, rte
+from dr_core.eval.metrics import ate, drift_pct, final_error, resample_to, rte
 from dr_core.eval.report import RunReport, generate_report
 
-__all__ = ["RunReport", "ate", "drift_pct", "final_error", "generate_report", "rte"]
+__all__ = ["RunReport", "ate", "drift_pct", "final_error", "generate_report", "resample_to", "rte"]

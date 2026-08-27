@@ -162,12 +162,16 @@ src/dr_core/        the shared library — imported by BOTH training and live
   io/                 session record format
 
 services/gateway/   FastAPI: WS ingest, local MBTiles, replay, live broadcast
-apps/android/       Kotlin IMU streamer — capture-time stamping over the hotspot
-apps/web/           React + Leaflet — the dot, the ellipse, the telemetry strip
+apps/android/       Kotlin IMU streamer — capture-time stamping over the hotspot (APP.md)
+apps/web/           React + Leaflet — the dot, the ellipse, the telemetry strip (WEB.md)
 scripts/            thin CLI entry points
 tests/              frame invariants, timing, gating, the frozen contract
 docs/               the plan, the conventions, the runbook
 ```
+
+The Android app and the web UI each have their own doc going deeper than this map does:
+[APP.md](APP.md) (requirements, wire format, permissions, current status) and
+[WEB.md](WEB.md) (same, for the browser side).
 
 Two structural guarantees, both enforced by tests rather than by good intentions:
 

@@ -20,6 +20,7 @@ from pathlib import Path
 from dr_core import __version__
 from dr_core.eval.report import generate_report
 from dr_core.fusion.eskf import Eskf
+from dr_core.timebase.reorder import DEFAULT_LAG_NS, ReorderBuffer
 from dr_core.types import GpsFix, ImuSample, Trajectory
 
 EXIT_OK = 0
@@ -88,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.no_gps:
         eskf.set_gps_enabled(False)
 
+    buf: ReorderBuffer[tuple[str, object]] = ReorderBuffer(lag_ns=DEFAULT_LAG_NS)
     t_list: list[int] = []
     p_list: list[list[float]] = []
     psi_list: list[float] = []
@@ -95,20 +97,35 @@ def main(argv: list[str] | None = None) -> int:
     gps_t: list[int] = []
     gps_p: list[list[float]] = []
 
+    def _process_item(itype: str, ipayload: object) -> None:
+        if itype == "imu" and isinstance(ipayload, ImuSample):
+            eskf.predict(ipayload.t_ns, float(ipayload.w_body[2]))
+            st = eskf.state
+            t_list.append(st.t_ns)
+            p_list.append([float(st.p_world[0]), float(st.p_world[1])])
+            psi_list.append(st.psi_rad)
+        elif itype == "gps" and isinstance(ipayload, GpsFix):
+            if not args.no_gps:
+                eskf.update_gps(ipayload)
+            st = eskf.state
+            gps_t.append(ipayload.t_ns)
+            gps_p.append([float(st.p_world[0]), float(st.p_world[1])])
+
+    last_t_ns = 0
     try:
         for rec_type, payload in reader:
-            if rec_type == "imu" and isinstance(payload, ImuSample):
-                eskf.predict(payload.t_ns, float(payload.w_body[2]))
-                st = eskf.state
-                t_list.append(st.t_ns)
-                p_list.append([float(st.p_world[0]), float(st.p_world[1])])
-                psi_list.append(st.psi_rad)
-            elif rec_type == "gps" and isinstance(payload, GpsFix):
-                if not args.no_gps:
-                    eskf.update_gps(payload)
-                st = eskf.state
-                gps_t.append(payload.t_ns)
-                gps_p.append([float(st.p_world[0]), float(st.p_world[1])])
+            if (rec_type == "imu" and isinstance(payload, ImuSample)) or (
+                rec_type == "gps" and isinstance(payload, GpsFix)
+            ):
+                last_t_ns = max(last_t_ns, payload.t_ns)
+                buf.push(payload.t_ns, (rec_type, payload))
+
+            for _t_ns, (itype, ipayload) in buf.drain(last_t_ns):
+                _process_item(itype, ipayload)
+
+        # Drain remainder at end of stream
+        for _t_ns, (itype, ipayload) in buf.drain(last_t_ns + 2 * DEFAULT_LAG_NS):
+            _process_item(itype, ipayload)
     except NotImplementedError as e:
         print(
             f"dr-eval: playback interrupted -- reader iteration pending ({e})",

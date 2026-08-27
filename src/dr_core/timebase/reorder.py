@@ -14,6 +14,7 @@ survives questioning; extrapolating to hide the lag does not.
 
 from __future__ import annotations
 
+import heapq
 from typing import Generic, TypeVar
 
 T = TypeVar("T")
@@ -41,7 +42,12 @@ class ReorderBuffer(Generic[T]):
         """
         self._lag_ns = lag_ns
         self._max_size = max_size
-        raise NotImplementedError("M0 -- owner: Sristee")
+        # (t_ns, seq, item); seq breaks ties so two same-timestamp items order by
+        # arrival and T is never compared.
+        self._heap: list[tuple[int, int, T]] = []
+        self._seq = 0
+        # Highest timestamp released so far; None until the first drain.
+        self._last_released_ns: int | None = None
 
     def push(self, t_ns: int, item: T) -> None:
         """Queue a measurement at its capture time.
@@ -51,11 +57,25 @@ class ReorderBuffer(Generic[T]):
                 measurement can no longer be fused in order and dropping it silently
                 would hide a real timing bug.
         """
-        raise NotImplementedError("M0 -- owner: Sristee")
+        if self._last_released_ns is not None and t_ns < self._last_released_ns:
+            raise ValueError(
+                f"measurement at {t_ns} ns is older than the last released "
+                f"timestamp {self._last_released_ns} ns and can no longer be fused in order"
+            )
+        if len(self._heap) >= self._max_size:
+            raise ValueError(f"reorder buffer is full ({self._max_size}); the consumer has stalled")
+        heapq.heappush(self._heap, (t_ns, self._seq, item))
+        self._seq += 1
 
     def drain(self, now_ns: int) -> list[tuple[int, T]]:
         """Release everything captured at or before ``now_ns - lag_ns``, in order."""
-        raise NotImplementedError("M0 -- owner: Sristee")
+        cutoff = now_ns - self._lag_ns
+        released: list[tuple[int, T]] = []
+        while self._heap and self._heap[0][0] <= cutoff:
+            t_ns, _seq, item = heapq.heappop(self._heap)
+            released.append((t_ns, item))
+            self._last_released_ns = t_ns
+        return released
 
     def __len__(self) -> int:
-        raise NotImplementedError("M0 -- owner: Sristee")
+        return len(self._heap)

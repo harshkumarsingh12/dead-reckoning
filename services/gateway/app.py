@@ -7,13 +7,18 @@ Routes:
     WS   /ingest                      phone pushes device-timestamped samples
     WS   /live                        browser subscribes to TelemetryFrame updates
     GET  /tiles/{z}/{x}/{y}.png       tiles from the local MBTiles, no internet
+    GET  /reports/{run_id}/{file}     a report generate_report already wrote to disk
     POST /control/gps                 the demo's GPS-off toggle
     POST /control/replay              start the golden-run replay (#37, not yet)
 
-`/ingest`, `/live`, `/control/gps`, and tile serving are real. `/live`'s position is a
-placeholder GPS passthrough until the ESKF (M3) lands -- see `services/gateway/hub.py`
-for exactly why and what replaces it. `/control/replay` still 501s: it needs a
-recorded golden run that does not exist yet (#37).
+`/ingest`, `/live`, `/control/gps`, tile serving, and report serving are real. `/live`'s
+position is a placeholder GPS passthrough until the ESKF (M3) lands -- see
+`services/gateway/hub.py` for exactly why and what replaces it. `/reports` serves
+files a human already generated offline with `scripts/run_eval.py`; there is no route
+here that triggers report generation from a live session yet -- see
+`services/gateway/reports.py` for why that is not honestly buildable until the ESKF is
+wired into the live path and a ground-truth loop exists. `/control/replay` still 501s:
+it needs a recorded golden run that does not exist yet (#37).
 """
 
 from __future__ import annotations
@@ -22,10 +27,11 @@ import sqlite3
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from dr_core import __version__
 from services.gateway.hub import Hub
+from services.gateway.reports import content_type_for, resolve_report_file
 from services.gateway.tiles import xyz_to_tms_row
 from services.gateway.wire import decode_gps, decode_imu
 
@@ -38,7 +44,11 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
 
 
-def create_app(tiles_path: Path | None = None, model_path: Path | None = None) -> FastAPI:
+def create_app(
+    tiles_path: Path | None = None,
+    model_path: Path | None = None,
+    reports_dir: Path | None = None,
+) -> FastAPI:
     """Build the app.
 
     Args:
@@ -46,6 +56,8 @@ def create_app(tiles_path: Path | None = None, model_path: Path | None = None) -
             fine for development against an online basemap but NOT acceptable for the
             demo -- see the offline checklist in docs/DEMO_RUNBOOK.md.
         model_path: ONNX velocity model. None runs baselines only.
+        reports_dir: directory `generate_report` writes ``<run_id>/`` subfolders into.
+            None disables the ``/reports`` route.
     """
     app = FastAPI(
         title="SIH26168 dead-reckoning gateway",
@@ -67,11 +79,13 @@ def create_app(tiles_path: Path | None = None, model_path: Path | None = None) -
             "version": __version__,
             "tiles_loaded": tiles_path is not None,
             "model_loaded": model_path is not None,
+            "reports_dir_configured": reports_dir is not None,
         }
 
     _register_ingest(app, hub)
     _register_live(app, hub)
     _register_tiles(app, tiles_path)
+    _register_reports(app, reports_dir)
     _register_control(app, hub)
 
     return app
@@ -147,6 +161,24 @@ def _register_tiles(app: FastAPI, tiles_path: Path | None) -> None:
         if row is None:
             raise HTTPException(status_code=404, detail="tile not found")
         return Response(content=row[0], media_type="image/png")
+
+
+def _register_reports(app: FastAPI, reports_dir: Path | None) -> None:
+    """GET /reports/{run_id}/{filename} -- a file `generate_report` already wrote.
+
+    Read-only and refuses anything outside `reports_dir` or not on the fixed list of
+    filenames the report writer actually produces -- see `services/gateway/reports.py`
+    for the path-traversal reasoning and for why there is no *trigger* route here yet.
+    """
+    if reports_dir is None:
+        return
+
+    @app.get("/reports/{run_id}/{filename}")
+    def get_report_file(run_id: str, filename: str) -> FileResponse:
+        path = resolve_report_file(reports_dir, run_id, filename)
+        if path is None:
+            raise HTTPException(status_code=404, detail="report file not found")
+        return FileResponse(path, media_type=content_type_for(filename))
 
 
 def _register_control(app: FastAPI, hub: Hub) -> None:

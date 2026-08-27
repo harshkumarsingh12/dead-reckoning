@@ -17,16 +17,16 @@ its owner, and CI prints the remaining count as a burndown table on every run.
 
 **Target: the harness and the clocks are trusted.**
 
-| Deliverable | Owner |
-|---|---|
-| Eval harness: ATE / RTE / drift | Sikruti |
-| NIS / NEES logger | Sikruti |
-| Clock-offset mapper, sharp-motion verification | Sristee |
-| ~300 ms reorder buffer | Sristee |
-| Session record format (read + write + replay) | Sristee |
-| Frame unit tests including rotation-in-place | Sristee |
-| **RoNIN / OxIOD access requested** | Sumedha |
-| Repo, CI/CD, governance docs | Harsh |
+| Deliverable | Owner | Status |
+|---|---|---|
+| Eval harness: ATE / RTE / drift | Sikruti | ✅ Done |
+| NIS / NEES logger | Sikruti | ✅ Done |
+| Clock-offset mapper, sharp-motion verification | Sristee | ✅ Done |
+| ~300 ms reorder buffer | Sristee | ✅ Done |
+| Session record format (read + write + replay) | Sristee | In progress |
+| Frame unit tests including rotation-in-place | Sristee | In progress |
+| **RoNIN / OxIOD access requested** | Sumedha | In progress |
+| Repo, CI/CD, governance docs | Harsh | ✅ Done |
 
 **Done when:** one command turns a recording into a trajectory plot, error numbers, and
 a timing-alignment check, all passing.
@@ -84,14 +84,14 @@ calibrated at roughly 68% within 1σ **and** inference is under budget.
 
 **Target: drift 3–5%, NIS consistent on every channel.**
 
-| Deliverable | Owner |
-|---|---|
-| 2D ESKF: predict + inject/reset | Sikruti |
-| Device-frame velocity update, with the `dh/dpsi` heading term | Sikruti |
-| ZUPT and ZARU, driven by the stationary detector | Sikruti |
-| Per-session velocity scale `s`, frozen when GPS drops | Sikruti |
-| Chi-square gating on every channel, NIS logged | Sikruti |
-| Reorder buffer wired into the live path | Sikruti, Sristee |
+| Deliverable | Owner | Status |
+|---|---|---|
+| 2D ESKF: predict + inject/reset | Sikruti | ✅ Done |
+| Device-frame velocity update, with the `dh/dpsi` heading term | Sikruti | ✅ Done |
+| ZUPT and ZARU, driven by the stationary detector | Sikruti | ✅ Done |
+| Per-session velocity scale `s`, frozen when GPS drops | Sikruti | ✅ Done |
+| Chi-square gating on every channel, NIS logged | Sikruti | ✅ Done |
+| Reorder buffer wired into the live path | Sikruti, Sristee | ✅ Done |
 
 **Done when:** fused beats model-only on ATE and RTE, NIS is in bounds on all channels,
 and a 10 s stop produces zero position creep.

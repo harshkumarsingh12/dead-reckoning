@@ -17,8 +17,8 @@ preprocessing guarantee stops meaning anything.
 conda create -n sih26168 -c conda-forge --override-channels python=3.11 -y
 conda activate sih26168
 
-git clone https://github.com/harshkumarsingh12/sih26168-dead-reckoning.git
-cd sih26168-dead-reckoning
+git clone https://github.com/harshkumarsingh12/dead-reckoning.git
+cd dead-reckoning
 
 pip install -e ".[dev]"
 pre-commit install

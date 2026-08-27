@@ -11,6 +11,7 @@ labels.
 
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass
 
 NS_PER_S = 1_000_000_000
@@ -54,7 +55,17 @@ def estimate_offset(
     Raises:
         ValueError: if the two sequences differ in length or are empty.
     """
-    raise NotImplementedError("M0 -- owner: Sristee")
+    if len(boot_ns) != len(utc_ns):
+        raise ValueError(f"boot_ns and utc_ns differ in length: {len(boot_ns)} vs {len(utc_ns)}")
+    if not boot_ns:
+        raise ValueError("cannot estimate an offset from no observations")
+
+    diffs = [utc - boot for boot, utc in zip(boot_ns, utc_ns, strict=True)]
+    # Median, not mean: a single mis-paired sample at session start should not drag
+    # the whole offset. residual_std flags a session too noisy to trust the fit.
+    offset_ns = int(statistics.median(diffs))
+    residual_std_ns = statistics.pstdev(diffs) if len(diffs) > 1 else 0.0
+    return ClockMapper(offset_ns=offset_ns, residual_std_ns=residual_std_ns)
 
 
 def verify_sharp_motion_alignment(

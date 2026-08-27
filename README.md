@@ -5,9 +5,9 @@
 Keeping an accurate position estimate when the satellites are gone — in a tunnel, in a
 basement, in an urban canyon — using nothing but the phone already in your pocket.
 
-[![CI · Python](https://github.com/harshkumarsingh12/sih26168-dead-reckoning/actions/workflows/ci-python.yml/badge.svg)](https://github.com/harshkumarsingh12/sih26168-dead-reckoning/actions/workflows/ci-python.yml)
-[![CI · Web](https://github.com/harshkumarsingh12/sih26168-dead-reckoning/actions/workflows/ci-web.yml/badge.svg)](https://github.com/harshkumarsingh12/sih26168-dead-reckoning/actions/workflows/ci-web.yml)
-[![CI · Android](https://github.com/harshkumarsingh12/sih26168-dead-reckoning/actions/workflows/ci-android.yml/badge.svg)](https://github.com/harshkumarsingh12/sih26168-dead-reckoning/actions/workflows/ci-android.yml)
+[![CI · Python](https://github.com/harshkumarsingh12/dead-reckoning/actions/workflows/ci-python.yml/badge.svg)](https://github.com/harshkumarsingh12/dead-reckoning/actions/workflows/ci-python.yml)
+[![CI · Web](https://github.com/harshkumarsingh12/dead-reckoning/actions/workflows/ci-web.yml/badge.svg)](https://github.com/harshkumarsingh12/dead-reckoning/actions/workflows/ci-web.yml)
+[![CI · Android](https://github.com/harshkumarsingh12/dead-reckoning/actions/workflows/ci-android.yml/badge.svg)](https://github.com/harshkumarsingh12/dead-reckoning/actions/workflows/ci-android.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
@@ -123,8 +123,8 @@ Python **3.11** specifically — see [CONTRIBUTING.md](CONTRIBUTING.md) for why.
 conda create -n sih26168 -c conda-forge --override-channels python=3.11 -y
 conda activate sih26168
 
-git clone https://github.com/harshkumarsingh12/sih26168-dead-reckoning.git
-cd sih26168-dead-reckoning
+git clone https://github.com/harshkumarsingh12/dead-reckoning.git
+cd dead-reckoning
 pip install -e ".[dev]"
 pre-commit install
 
@@ -162,12 +162,16 @@ src/dr_core/        the shared library — imported by BOTH training and live
   io/                 session record format
 
 services/gateway/   FastAPI: WS ingest, local MBTiles, replay, live broadcast
-apps/android/       Kotlin IMU streamer — capture-time stamping over the hotspot
-apps/web/           React + Leaflet — the dot, the ellipse, the telemetry strip
+apps/android/       Kotlin IMU streamer — capture-time stamping over the hotspot (APP.md)
+apps/web/           React + Leaflet — the dot, the ellipse, the telemetry strip (WEB.md)
 scripts/            thin CLI entry points
 tests/              frame invariants, timing, gating, the frozen contract
 docs/               the plan, the conventions, the runbook
 ```
+
+The Android app and the web UI each have their own doc going deeper than this map does:
+[APP.md](APP.md) (requirements, wire format, permissions, current status) and
+[WEB.md](WEB.md) (same, for the browser side).
 
 Two structural guarantees, both enforced by tests rather than by good intentions:
 

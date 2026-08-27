@@ -227,6 +227,12 @@ class TelemetryFrame:
     gps_enabled: bool = True
     distance_travelled_m: float = 0.0
     drift_pct: float | None = None  # live headline number: error / distance
+    # The world-frame origin, so the browser can convert p_world (local ENU metres)
+    # back to lat/lon for the real basemap. None until the session's first GPS fix
+    # sets an origin (see services/gateway/hub.py). Additive field -- every existing
+    # TelemetryFrame call site keeps working unchanged.
+    origin_lat_deg: float | None = None
+    origin_lon_deg: float | None = None
 
 
 # --------------------------------------------------------------------------- session

@@ -41,15 +41,15 @@ a timing-alignment check, all passing.
 
 **Target: PDR under 10% drift; the magnetometer gate demonstrably fires.**
 
-| Deliverable | Owner |
-|---|---|
-| Shared preprocessing and calibration module | Sristee |
-| AHRS orientation (Madgwick) | Sristee |
-| Magnetometer hard-iron fit + magnitude/dip/innovation triple gate | Sristee |
-| Raw double-integration baseline | Sristee |
-| PDR baseline | Sristee |
-| First own recordings: outdoor GPS walks + one surveyed indoor loop | Sumedha |
-| Web UI shell against mock frames | Tanmay, Akshit |
+| Deliverable | Owner | Status |
+|---|---|---|
+| Shared preprocessing (gravity alignment) and calibration module | Sristee | ✅ Done — resample/window still open for M2 |
+| AHRS orientation (imufusion) | Sristee | In progress — 3/4 frame tests pass, turning doesn't close the loop yet |
+| Magnetometer hard-iron fit + magnitude/dip/innovation triple gate | Sristee | In progress — logic implemented, untested (no unit test, no physical magnet demo) |
+| Raw double-integration baseline | Sristee | In progress — blocked on the same turning gap as AHRS above |
+| PDR baseline | Sristee | Not started |
+| First own recordings: outdoor GPS walks + one surveyed indoor loop | Sumedha | Not started |
+| Web UI shell against mock frames | Tanmay, Akshit | Not started |
 
 **Done when:** end to end on a test loop, and the magnet test visibly trips the gate
 without corrupting heading.
@@ -102,16 +102,16 @@ and a 10 s stop produces zero position creep.
 
 **Target: the headline number holds live, offline.**
 
-| Deliverable | Owner |
-|---|---|
-| Android IMU streamer, capture-time stamping, WS uplink | Harsh |
-| Gateway: ingest, broadcast, control, replay | Harsh |
-| Offline MBTiles built and verified with Wi-Fi off | Harsh |
-| Golden-run replay through the identical pipeline | Harsh |
-| Map, dot, ellipse, GPS toggle, diverging baseline dot | Tanmay |
-| Telemetry strip: NIS, ZUPT/ZARU lamp, mag gate, σ, heading source | Akshit |
-| Auto post-run report panel | Akshit, Sikruti |
-| Scripted 3-minute arc, rehearsed | Tanmay, Sumedha |
+| Deliverable | Owner | Status |
+|---|---|---|
+| Android IMU streamer, capture-time stamping, WS uplink | Harsh | ✅ Done — code verified, real on-device test still pending |
+| Gateway: ingest, broadcast, control | Harsh | ✅ Done — `/live` is a GPS-passthrough placeholder pending the live ESKF |
+| Golden-run replay through the identical pipeline | Harsh | Blocked — needs `dr_core.io.SessionReader` (Sristee, M0) |
+| Offline MBTiles built and verified with Wi-Fi off | Harsh | Build/serve mechanism ✅ done; needs the actual demo venue's bounding box |
+| Map, dot, ellipse, GPS toggle, diverging baseline dot | Tanmay | Not started |
+| Telemetry strip: NIS, ZUPT/ZARU lamp, mag gate, σ, heading source | Akshit | ✅ Done — verified against a mock frame, screenshots reviewed |
+| Auto post-run report panel | Akshit, Sikruti | Presenter + serving ✅ done; live auto-trigger blocked on the ESKF + a surveyed loop |
+| Scripted 3-minute arc, rehearsed | Tanmay, Sumedha | Not started |
 
 **Done when:** the full demo executes with venue internet unplugged and the dot does not
 visibly lag turns.

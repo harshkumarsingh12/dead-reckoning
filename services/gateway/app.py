@@ -26,6 +26,7 @@ from fastapi.responses import Response
 
 from dr_core import __version__
 from services.gateway.hub import Hub
+from services.gateway.tiles import xyz_to_tms_row
 from services.gateway.wire import decode_gps, decode_imu
 
 if TYPE_CHECKING:
@@ -123,8 +124,10 @@ def _register_tiles(app: FastAPI, tiles_path: Path | None) -> None:
 
     MBTiles is a SQLite container; a tile is one BLOB row keyed by (zoom, column, row).
     Rows are stored TMS-style (bottom-up); Leaflet/XYZ requests count rows top-down --
-    the flip below is that fix. Getting it backwards produces a map that looks almost
-    right, which is a worse bug than one that looks completely wrong.
+    `services.gateway.tiles.xyz_to_tms_row` is that fix, shared with the builder in
+    `scripts/make_tiles.py` so the two can never disagree about which row is which.
+    Getting it backwards produces a map that looks almost right, which is a worse bug
+    than one that looks completely wrong.
 
     A sync (non-async) handler: FastAPI runs it in its worker threadpool automatically,
     which keeps a blocking `sqlite3` call off the event loop without extra plumbing.
@@ -134,7 +137,7 @@ def _register_tiles(app: FastAPI, tiles_path: Path | None) -> None:
 
     @app.get("/tiles/{z}/{x}/{y}.png")
     def get_tile(z: int, x: int, y: int) -> Response:
-        tms_row = (2**z - 1) - y
+        tms_row = xyz_to_tms_row(y, z)
         with sqlite3.connect(tiles_path) as conn:
             row = conn.execute(
                 "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? "

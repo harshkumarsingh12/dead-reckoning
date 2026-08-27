@@ -36,15 +36,30 @@ body {
 /* ---------------------------------------------------------------- track map */
 
 .track-map {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   background: #0b1020; /* Leaflet's own background before tiles paint; not a token
                            value since it is never seen once the map is live. */
-  color: var(--color-surface);
+}
+
+.track-map-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.track-map-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0;
+  color: var(--color-surface);
   font-size: 1.1rem;
+  background: rgba(11, 16, 32, 0.7);
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------------- telemetry strip */

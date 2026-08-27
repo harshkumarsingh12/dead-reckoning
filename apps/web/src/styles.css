@@ -1,0 +1,172 @@
+/*
+ * Global layout. Colour/spacing/radius values are CSS custom properties injected by
+ * ui/applyTokens.ts from ui/tokens.ts -- never hardcode a hex value here, add it to
+ * tokens.ts instead. OWNER: Akshit.
+ *
+ * Built for a bright hall on a projector: high contrast, large type, and every state
+ * (accept/reject/warn) carries a text label so it never depends on hue perception
+ * alone -- see tokens.ts's own rationale.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--color-text);
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--color-text);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-surface);
+}
+
+/* ---------------------------------------------------------------- track map */
+
+.track-map {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #0b1020; /* Leaflet's own background before tiles paint; not a token
+                           value since it is never seen once the map is live. */
+  color: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+/* --------------------------------------------------------------- telemetry strip */
+
+.telemetry-strip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-text);
+  color: var(--color-surface);
+  border-top: 2px solid var(--color-muted);
+  font-size: 1rem;
+}
+
+.strip-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.strip-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Every state below pairs a colour with a shape (the dot glyph) AND a text label --
+   never colour alone. Roughly one judge in twelve is colour-blind. */
+.badge--ok {
+  background: color-mix(in srgb, var(--color-ok) 22%, transparent);
+  color: var(--color-ok);
+}
+.badge--warn {
+  background: color-mix(in srgb, var(--color-warn) 22%, transparent);
+  color: var(--color-warn);
+}
+.badge--reject {
+  background: color-mix(in srgb, var(--color-reject) 22%, transparent);
+  color: var(--color-reject);
+}
+.badge--muted {
+  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
+  color: var(--color-muted);
+}
+
+.badge-dot {
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.drift-counter {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 6.5rem;
+}
+.drift-counter .value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.drift-counter .value--pending {
+  color: var(--color-muted);
+}
+
+.nis-gauges {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.nis-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 5rem;
+}
+
+.nis-gauge-track {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-muted) 35%, transparent);
+  overflow: hidden;
+}
+
+.nis-gauge-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  transform-origin: left;
+}
+
+.nis-gauge-fill--ok {
+  background: var(--color-ok);
+}
+.nis-gauge-fill--warn {
+  background: var(--color-reject);
+}
+
+.nis-gauge-value {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-surface);
+}

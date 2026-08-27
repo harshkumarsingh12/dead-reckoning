@@ -1,0 +1,4 @@
+# Copy to local.properties and point at your own Android SDK. Gitignored.
+# Note the escaped colon: .properties treats both ':' and '\' specially, and Android
+# lint fails the build if you get it wrong.
+sdk.dir=C\:/Users/YOURNAME/AppData/Local/Android/Sdk

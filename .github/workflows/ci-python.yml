@@ -1,0 +1,99 @@
+name: CI · Python
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to a PR cancels the previous run. Six people, one free runner pool.
+concurrency:
+  group: ci-python-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned deliberately: torch and onnxruntime wheels are unreliable above this,
+  # and everyone on the team must share one interpreter or the shared-preprocessing
+  # guarantee is worthless. See CONTRIBUTING.md.
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  quality:
+    name: Lint · types · tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check --output-format=github .
+
+      - name: Ruff format
+        run: ruff format --check .
+
+      - name: Mypy (strict)
+        run: mypy
+
+      - name: Tests
+        run: pytest -q --cov --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+
+      # The xfail ledger is this project's burndown chart. Every strict-xfail test is
+      # an unimplemented acceptance criterion with an owner named in its reason
+      # string; the count going down is the only progress metric that cannot be faked.
+      - name: Milestone burndown
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import collections, pathlib, re
+          rows = collections.Counter()
+          for path in pathlib.Path("tests").rglob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              for m in re.finditer(r'xfail\(reason="(M\d)[^"]*owner: ([^)"]+)\)', text):
+                  rows[(m.group(1), m.group(2).strip())] += 1
+          print("## Milestone burndown\n")
+          print("Remaining acceptance criteria, by milestone and owner.\n")
+          print("| Milestone | Owner | Open |")
+          print("|---|---|---|")
+          for (ms, owner), n in sorted(rows.items()):
+              print(f"| {ms} | {owner} | {n} |")
+          print(f"\n**Total open: {sum(rows.values())}**")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.xml
+          retention-days: 7
+
+  frames:
+    # Its own job on purpose. Coordinate-frame bugs are the single most likely way to
+    # ship a trajectory that is silently and confidently wrong, and the rotation-in-
+    # place invariant is the only one of the three that catches the classic failure.
+    # A named red check is much harder to scroll past than a line in a long log.
+    name: Frame invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Straight line · pure turn · rotation in place
+        run: pytest -m frames -v

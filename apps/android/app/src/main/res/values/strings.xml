@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">IMU Streamer</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="calibrate">Calibrate</string>
+    <string name="mark_event">Mark event</string>
+    <string name="server_hint">ws://192.168.43.1:8000/ingest</string>
+</resources>

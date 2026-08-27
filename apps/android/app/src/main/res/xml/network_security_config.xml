@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The gateway runs on a laptop reached over the phone's own hotspot, on plain HTTP
+  and ws://. Android blocks cleartext by default, so the private ranges are opted in
+  explicitly rather than by switching cleartext on everywhere.
+
+  Deliberately scoped to RFC1918 addresses: the app can never be talked into sending
+  IMU traffic to an arbitrary cleartext host on the internet.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="true">172.16.0.0</domain>
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

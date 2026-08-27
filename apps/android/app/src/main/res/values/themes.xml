@@ -1,0 +1,7 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- TODO(Akshit): launcher icon and a colour scheme matching the web UI tokens
+         (apps/web/src/ui/tokens.ts). Until then this is stock Material 3. -->
+    <style name="Theme.ImuStreamer" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+    </style>
+</resources>

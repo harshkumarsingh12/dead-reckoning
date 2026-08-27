@@ -1,0 +1,64 @@
+# Automatic reviewer assignment. The full ownership table, with the reasoning behind
+# each split, is in CONTRIBUTING.md — this file only makes GitHub act on it.
+#
+#   Harsh    @harshkumarsingh12    app · backend · devops · CI/CD
+#   Sristee  @srshriv              time · preprocessing · AHRS · baselines · security
+#   Sumedha  @sumedhag28           the learned model · datasets
+#   Sikruti  @hoursgotviral-dev    ESKF fusion · evaluation harness
+#   Tanmay   @7tanmay7             map UI · websocket client · presentation
+#   Akshit   @Akshit19-05          telemetry strip · design system · deck
+#
+# CODEOWNERS silently ignores anyone who is not a collaborator on the repo, so a
+# missing invite looks exactly like a working config. After inviting everyone, check:
+#
+#   gh api repos/harshkumarsingh12/sih26168-dead-reckoning/collaborators \
+#     --jq '.[].login'
+
+# Default: anything not matched below.
+*                                   @harshkumarsingh12
+
+# ── Areas 1-3: infra, mobile, gateway
+/.github/                           @harshkumarsingh12
+/Makefile                           @harshkumarsingh12
+/tasks.ps1                          @harshkumarsingh12
+/pyproject.toml                     @harshkumarsingh12
+/apps/android/                      @harshkumarsingh12
+/services/gateway/                  @harshkumarsingh12
+
+# ── Areas 4-7: time, preprocessing, AHRS, baselines, transport security
+/src/dr_core/timebase/              @srshriv
+/src/dr_core/io/                    @srshriv
+/src/dr_core/preprocess/            @srshriv
+/src/dr_core/ahrs/                  @srshriv
+/src/dr_core/baselines/             @srshriv
+/.github/workflows/pr-hygiene.yml   @srshriv @harshkumarsingh12
+
+# ── Areas 8-9: the learned model and the data
+/src/dr_core/models/                @sumedhag28
+/src/dr_core/datasets/              @sumedhag28
+/scripts/train.py                   @sumedhag28
+/scripts/export_onnx.py             @sumedhag28
+/scripts/fetch_datasets.py          @sumedhag28
+/data/                              @sumedhag28
+
+# ── Areas 10-11: fusion and evaluation
+/src/dr_core/fusion/                @hoursgotviral-dev
+/src/dr_core/eval/                  @hoursgotviral-dev
+/scripts/run_eval.py                @hoursgotviral-dev
+/docs/EVALUATION.md                 @hoursgotviral-dev
+
+# ── Area 12: map, dot, ellipse, socket
+/apps/web/src/map/                  @7tanmay7
+/apps/web/src/ws/                   @7tanmay7
+/docs/DEMO_RUNBOOK.md               @7tanmay7 @sumedhag28
+
+# ── Areas 13-14: telemetry strip, design system
+/apps/web/src/telemetry/            @Akshit19-05
+/apps/web/src/ui/                   @Akshit19-05
+
+# ── The frozen contract and the conventions. Changing either breaks several people at
+#    once, so both sides of the contract require the repo owner's review as well.
+/src/dr_core/types.py               @harshkumarsingh12
+/apps/web/src/types.ts              @harshkumarsingh12 @7tanmay7
+/docs/CONVENTIONS.md                @harshkumarsingh12
+/docs/BUILD_PLAN.md                 @harshkumarsingh12

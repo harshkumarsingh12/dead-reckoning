@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Actions get pinned by major tag, so this mostly catches deprecations before a
+  # workflow starts failing on a runner image change.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+    # torch is pinned by what actually trains. An automated bump mid-build is a
+    # distraction at best and a silent numerical change at worst.
+    ignore:
+      - dependency-name: torch
+      - dependency-name: numpy
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore

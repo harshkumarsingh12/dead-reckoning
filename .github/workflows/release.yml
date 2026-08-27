@@ -1,0 +1,105 @@
+name: Release
+
+# Tag a milestone, get a downloadable bundle of everything that milestone produced.
+# Useful for the SIH submission itself: a tagged artefact with a fixed commit behind
+# it is much better evidence than "it works on the laptop".
+#
+#   git tag -a v0.3.0-m3 -m "M3: ESKF fusion"
+#   git push origin v0.3.0-m3
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: mypy
+      - run: pytest -q
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Assemble
+        working-directory: apps/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: apps/android/app/build/outputs/apk/debug/*.apk
+
+  web:
+    name: Web bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: apps/web/dist
+
+  release:
+    name: Publish
+    needs: [verify, android, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.apk' -o -name '*.onnx' \) -exec cp {} release/ \;
+          if [ -d artifacts/web ]; then
+            tar -czf release/web-dist.tar.gz -C artifacts/web .
+          fi
+          ls -lh release/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*
+          body: |
+            SIH26168 — GPS-denied pedestrian dead reckoning (ISRO).
+
+            Attached: the IMU streamer APK and the offline demo web bundle. Map tiles
+            and datasets are NOT attached — they are regenerated with
+            `scripts/make_tiles.py` and `scripts/fetch_datasets.py`.
+
+            Metrics for this tag are in `docs/EVALUATION.md`; setup is in
+            `CONTRIBUTING.md`.

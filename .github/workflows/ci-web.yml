@@ -1,0 +1,62 @@
+name: CI · Web
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/ci-web.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/web
+
+jobs:
+  build:
+    name: Lint · typecheck · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # The demo runs with the venue network unplugged. A basemap URL pointing at
+      # tile.openstreetmap.org survives development happily and dies on stage, so it
+      # is a build failure here rather than a discovery at the podium.
+      - name: No external tile hosts in the bundle
+        run: |
+          if grep -rIEl 'https?://[a-z.]*(tile|basemaps|mapbox|maptiler)' dist/; then
+            echo "::error::Bundle references an external tile host. Tiles must come "\
+                 "from the local MBTiles route. See docs/DEMO_RUNBOOK.md."
+            exit 1
+          fi
+          echo "Offline-safe: no external tile hosts in the bundle."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          retention-days: 7

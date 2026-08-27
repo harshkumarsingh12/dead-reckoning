@@ -1,0 +1,118 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dr-core"
+version = "0.1.0"
+description = "GPS-denied pedestrian dead reckoning — shared core (SIH26168, ISRO)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "SIH26168 Team" }]
+# Pinned to 3.11: torch / onnxruntime wheels are not reliably published for 3.12+
+# at the time of writing, and every member must be on the same interpreter or the
+# shared preprocessing guarantee is worthless. See CONTRIBUTING.md.
+requires-python = ">=3.11,<3.12"
+
+dependencies = [
+    "numpy>=1.26,<2.1",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    "matplotlib>=3.8",
+    "pydantic>=2.6",
+    "imufusion>=1.2",       # Madgwick AHRS — do not hand-roll (build plan 6.3)
+    "onnxruntime>=1.17",    # live inference path; torch is training-only
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+# Heavy, training-only. Kept out of the default install so the main CI job stays fast
+# and so the live/demo machine never needs a 2 GB torch download.
+ml = [
+    "torch>=2.2",
+    "onnx>=1.16",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pre-commit>=3.7",
+    "httpx>=0.27",          # FastAPI TestClient
+    "types-requests",
+]
+
+[project.scripts]
+dr-eval = "dr_core.eval.cli:main"
+
+[tool.setuptools.packages.find]
+# Two roots: the shared library lives under src/, the deployable service does not.
+where = ["src", "."]
+include = ["dr_core*", "services*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+dr_core = ["py.typed"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts", "services"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "ANN"]
+ignore = [
+    "ANN401",  # allow Any where a schema is genuinely dynamic
+    "B008",    # FastAPI Depends() in defaults is idiomatic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]          # test functions do not need return annotations
+"scripts/*" = ["ANN"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dr_core", "services"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+files = ["src", "services"]
+
+[[tool.mypy.overrides]]
+module = ["imufusion.*", "onnxruntime.*", "scipy.*", "matplotlib.*", "pandas.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "frames: coordinate-frame invariants (straight line, pure turn, rotation-in-place)",
+    "timing: clock-domain and reorder-buffer behaviour",
+    "gating: chi-square innovation gating and outlier rejection",
+    "ml: needs the [ml] extra (torch) — skipped in the default CI job",
+    "slow: takes more than a couple of seconds",
+]
+filterwarnings = ["error::DeprecationWarning:dr_core.*"]
+
+[tool.coverage.run]
+source = ["src/dr_core"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

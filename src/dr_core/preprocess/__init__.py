@@ -25,6 +25,7 @@ from dr_core.preprocess.pipeline import (
     heading_rad,
     prepare_window,
     resample_uniform,
+    rotate_dev_to_world,
     rotate_world_to_dev,
 )
 
@@ -39,5 +40,6 @@ __all__ = [
     "heading_rad",
     "prepare_window",
     "resample_uniform",
+    "rotate_dev_to_world",
     "rotate_world_to_dev",
 ]

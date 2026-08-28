@@ -134,6 +134,18 @@ def rotate_world_to_dev(vector_world: Array, psi_rad: float) -> Array:
     return result
 
 
+def rotate_dev_to_world(vector_dev: Array, psi_rad: float) -> Array:
+    """Rotate a planar device-aligned vector back into world ENU: the inverse of
+    ``rotate_world_to_dev`` (docs/CONVENTIONS.md section 1: ``v_world = R(psi) @
+    v_dev``). What a model-only integrator needs to turn the network's raw output
+    back into a plottable world-frame trajectory.
+    """
+    c, s = np.cos(psi_rad), np.sin(psi_rad)
+    rot = np.array([[c, -s], [s, c]], dtype=np.float64)
+    result: Array = rot @ np.asarray(vector_dev, dtype=np.float64)
+    return result
+
+
 def _rotate_horizontal_by(vectors: Array, psi_rad: float) -> Array:
     """Rotate the horizontal (x, y) columns of an (n, 3) world-frame array by -psi.
 

@@ -23,7 +23,10 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.0
+    # Pinned to match pyproject.toml's [dev] extra exactly (ruff==0.16.5) -- a hook
+    # enforcing a different ruleset than the locally installed ruff means "ruff check .
+    # is green" stops predicting "the commit will pass" (#63).
+    rev: v0.16.5
     hooks:
       - id: ruff
         args: [--fix]

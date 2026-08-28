@@ -119,11 +119,27 @@ def heading_rad(q_world_body: Array) -> float:
     return float(np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)))
 
 
+def rotate_world_to_dev(vector_world: Array, psi_rad: float) -> Array:
+    """Rotate a planar world-frame vector into the device-aligned frame at heading psi.
+
+    ``v_dev = R(-psi) @ v_world`` -- the exact convention the ESKF's device-frame
+    velocity measurement model assumes (build plan section 7.1: ``h(x) = (1/s) *
+    R(-psi) * v_world``) and the one ``prepare_window`` uses internally for the IMU
+    channels. Shared so a training-time velocity LABEL and a live filter update can
+    never disagree on which way "device-aligned" rotates.
+    """
+    c, s = np.cos(-psi_rad), np.sin(-psi_rad)
+    rot = np.array([[c, -s], [s, c]], dtype=np.float64)
+    result: Array = rot @ np.asarray(vector_world, dtype=np.float64)
+    return result
+
+
 def _rotate_horizontal_by(vectors: Array, psi_rad: float) -> Array:
     """Rotate the horizontal (x, y) columns of an (n, 3) world-frame array by -psi.
 
     The vertical (Up, column 2) component is invariant under a rotation about the
-    vertical axis and is passed through unchanged.
+    vertical axis and is passed through unchanged. Same convention as
+    ``rotate_world_to_dev``, batched over many samples instead of one vector.
     """
     c, s = np.cos(-psi_rad), np.sin(-psi_rad)
     rot = np.array([[c, -s], [s, c]], dtype=np.float64)

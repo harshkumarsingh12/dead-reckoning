@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 DATASET_INFO = {
     "ronin": {
@@ -42,7 +43,24 @@ def main() -> int:
             print(f"{key:8} {value}")
         return 0
 
-    raise NotImplementedError("M0 -- owner: Sumedha")
+    # Neither dataset is a plain public download: both gate access behind a request
+    # that can take days to approve (data/README.md, docs/BUILD_PLAN.md section 4).
+    # There is no URL this script could fetch from without that approval, so rather
+    # than pretend otherwise, it prepares the destination and prints exactly what to
+    # do once access lands -- consistent with load_ronin/load_oxiod's own guard,
+    # which checks for this same directory.
+    out_root = Path(args.out) if args.out else Path("data") / args.dataset
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    print(f"{args.dataset}: no direct-download URL -- access requires manual approval.")
+    print(f"  1. Request access: {info['access']}")
+    print("  2. Once approved, download the archive and extract its contents under:")
+    print(f"       {out_root}")
+    print(
+        f"  3. dr_core.datasets.load_{args.dataset} checks that directory; run this "
+        "again with --info any time to re-check the access URL."
+    )
+    return 0
 
 
 if __name__ == "__main__":

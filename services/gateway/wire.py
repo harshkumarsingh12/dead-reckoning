@@ -11,6 +11,13 @@ Two different timestamp encodings, deliberately:
   - **`/live`** (gateway -> browser): a decimal STRING. `JSON.parse` in the browser
     loses precision above `Number.MAX_SAFE_INTEGER`, which nanoseconds-since-boot
     exceed after roughly 104 days of device uptime.
+
+The `encode_*_for_ingest` functions are the mirror image of `decode_imu`/`decode_gps`:
+they build the exact same `/ingest` shape from a `dr_core.types` dataclass instead of
+parsing it. `scripts/replay.py` is the reason these exist -- pushing a recorded session
+back through `/ingest` needs to produce bytes indistinguishable from the phone's own,
+which is the whole point of a replay (build plan section 6.1: "indistinguishable in
+mechanics from live").
 """
 
 from __future__ import annotations
@@ -44,6 +51,36 @@ def decode_gps(raw: dict[str, Any]) -> GpsFix:
         course_rad=raw.get("course_rad"),
         altitude_m=raw.get("altitude_m"),
     )
+
+
+def encode_imu_for_ingest(sample: ImuSample) -> dict[str, Any]:
+    """Build an `{"type": "imu", ...}` /ingest message from a parsed sample."""
+    return {
+        "type": "imu",
+        "t_ns": sample.t_ns,
+        "a": [float(x) for x in sample.a_body],
+        "w": [float(x) for x in sample.w_body],
+        "m": [float(x) for x in sample.m_body] if sample.m_body is not None else None,
+    }
+
+
+def encode_gps_for_ingest(fix: GpsFix) -> dict[str, Any]:
+    """Build an `{"type": "gps", ...}` /ingest message from a parsed fix."""
+    return {
+        "type": "gps",
+        "t_ns": fix.t_ns,
+        "lat_deg": fix.lat_deg,
+        "lon_deg": fix.lon_deg,
+        "accuracy_m": fix.accuracy_m,
+        "speed_mps": fix.speed_mps,
+        "course_rad": fix.course_rad,
+        "altitude_m": fix.altitude_m,
+    }
+
+
+def encode_event_for_ingest(t_ns: int, name: str) -> dict[str, Any]:
+    """Build an `{"type": "event", ...}` /ingest message -- calibration and demo markers."""
+    return {"type": "event", "t_ns": t_ns, "name": name}
 
 
 def encode_telemetry_frame(frame: TelemetryFrame) -> dict[str, Any]:

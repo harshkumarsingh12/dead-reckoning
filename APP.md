@@ -179,11 +179,16 @@ JavaScript needs.
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` | Required on API 29+/34+ to run a foreground service whose job is location-adjacent sampling. |
 | `WAKE_LOCK` | Implied by the foreground service; keeps sampling alive with the screen off. |
 | `POST_NOTIFICATIONS` | So the persistent "streaming — N Hz" notification actually shows on API 33+. Not required to *start* the service, only to display it. |
+| `HIGH_SAMPLING_RATE_SENSORS` | `registerListener` at `SENSOR_DELAY_FASTEST` (0 µs) throws a `SecurityException` on API 31+ without this. Found on the first real on-device run, not in review. Normal permission, no runtime prompt. |
 
-`network_security_config.xml` opts into cleartext (`ws://`, not `wss://`) but **only**
-for RFC1918 private ranges and `localhost` — the app can never be talked into sending
-IMU traffic to an arbitrary cleartext host on the internet, even though cleartext is
-allowed at all.
+`network_security_config.xml` opts into cleartext (`ws://`, not `wss://`) globally
+(`base-config`). An earlier version tried to scope this to RFC1918 private ranges via
+per-octet `<domain>` entries (`192.168.0.0`, `10.0.0.0`, ...), on the mistaken assumption
+that Android's domain matching supports CIDR ranges — it doesn't, it's exact-string
+only, so those entries never matched a real device's IP on any real network and
+silently blocked cleartext everywhere except the literal address `localhost`. The real
+trust boundary is that the server URL is never hardcoded or auto-discovered: it's
+whatever the operator types into the app.
 
 ## Current status
 
@@ -194,13 +199,16 @@ allowed at all.
 | WebSocket uplink with reconnect | ✅ implemented |
 | Permission gating, guided calibration UI | ✅ implemented |
 | `./gradlew :app:assembleDebug` / `:app:lintDebug` | ✅ green locally (JDK 22) and in CI (Temurin 21) |
-| **On-device sensor behaviour** | ❌ **not verified** — no physical device or emulator sensor injection available in the environment this was built in |
-| **Actual handshake with a running gateway** | ❌ **not verified** for the same reason |
+| **On-device sensor behaviour** | ✅ verified on a real device (USB-tethered, `adb reverse tcp:8000 tcp:8000`) — sampling starts, achieved-rate readout updates on screen |
+| **Actual handshake with a running gateway** | ✅ verified — stable `WebSocket /ingest` connection accepted by a real gateway, no reconnect churn observed |
 | Launcher icon, colour scheme | ❌ not started (owner: Akshit) |
 
-If you're picking this up: the code compiles and lints clean, but has never actually
-talked to a phone's sensors or to a live gateway. Treat the first real device test as a
-genuine first run, not a formality.
+The first real device test surfaced two real bugs neither compiling nor linting could
+have caught: a missing `HIGH_SAMPLING_RATE_SENSORS` permission (crash on every start
+attempt on API 31+) and a `network_security_config.xml` that never actually matched a
+real device IP (silently blocked every cleartext connection on every real network, not
+just this one). Both are fixed; see the permissions table above. Treat "compiles and
+lints clean" as necessary, never sufficient, for this module going forward.
 
 ## Related
 

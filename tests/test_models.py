@@ -9,6 +9,8 @@ visible on the burndown.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -28,7 +30,6 @@ def test_output_dimension_carries_a_full_covariance() -> None:
     assert OUT_DIM == 5
 
 
-@pytest.mark.xfail(reason="M2 -- build_model unimplemented (owner: Sumedha)", strict=True)
 def test_model_is_strictly_causal() -> None:
     """Perturbing a FUTURE sample must not change the current output.
 
@@ -47,7 +48,6 @@ def test_model_is_strictly_causal() -> None:
     assert not torch.allclose(model(x_future)[:, :, -1], y_before)
 
 
-@pytest.mark.xfail(reason="M2 -- NLL loss unimplemented (owner: Sumedha)", strict=True)
 def test_nll_loss_penalises_overconfidence() -> None:
     """A tight sigma on a large error must cost more than an honest wide one.
 
@@ -64,7 +64,6 @@ def test_nll_loss_penalises_overconfidence() -> None:
     assert gaussian_nll_loss(overconfident, target) > gaussian_nll_loss(honest, target)
 
 
-@pytest.mark.xfail(reason="M2 -- augmentation unimplemented (owner: Sumedha)", strict=True)
 def test_random_yaw_augmentation_preserves_speed() -> None:
     """Rotating a window rotates its label by the same angle. Speed is invariant."""
     rng = np.random.default_rng(0)
@@ -89,15 +88,24 @@ def test_inference_fits_the_stated_budget() -> None:
     assert runtime.benchmark() < INFERENCE_BUDGET_MS
 
 
-@pytest.mark.xfail(reason="M2 -- ONNX export unimplemented (owner: Sumedha)", strict=True)
-def test_onnx_output_matches_torch() -> None:
+def test_onnx_output_matches_torch(tmp_path: Path) -> None:
     """Export parity. A quantized model that quietly disagrees with the one you
     validated is a very expensive way to lose a demo."""
+    import onnxruntime as ort
     import torch
 
     from dr_core.models.tcn import export_onnx
 
     model = build_model()
-    export_onnx(model, "build/parity.onnx", window_samples=200, quantize_int8=False)
+    model.eval()
+    onnx_path = tmp_path / "parity.onnx"
+    export_onnx(model, str(onnx_path), window_samples=200, quantize_int8=False)
+
     x = torch.randn(1, IN_CHANNELS, 200)
-    raise AssertionError(f"compare ONNX session output against {model(x).shape}")
+    with torch.no_grad():
+        torch_out = model(x).numpy()
+
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    (onnx_out,) = session.run(None, {session.get_inputs()[0].name: x.numpy()})
+
+    np.testing.assert_allclose(torch_out, onnx_out, rtol=1e-3, atol=1e-5)

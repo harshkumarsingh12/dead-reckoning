@@ -23,9 +23,13 @@ from dr_core.datasets.loaders import (
     load_ronin,
     split_by_trajectory,
 )
+from dr_core.datasets.sensor_logger import ConversionResult
+from dr_core.datasets.sensor_logger import convert as convert_sensor_logger_export
 
 __all__ = [
+    "ConversionResult",
     "Recording",
+    "convert_sensor_logger_export",
     "load_own_recording",
     "load_oxiod",
     "load_ronin",

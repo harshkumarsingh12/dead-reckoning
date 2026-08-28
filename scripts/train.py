@@ -25,6 +25,7 @@ same way, or a good eval number stops meaning anything.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -181,6 +182,17 @@ def main() -> int:
         pin_memory=pin_memory,
     )
 
+    # Fingerprints the exact set of recordings behind val_loader, so a resumed run can
+    # tell whether "best_val_loss" from the checkpoint is even comparable to this run's
+    # val_nll. Different --data/--oxiod-data/--oxiod-carry-positions between the
+    # original run and a resume produce a DIFFERENT split_by_trajectory result (the
+    # seeded shuffle depends on the input list's length and order) -- comparing losses
+    # across two different validation sets is comparing two different numbers that
+    # happen to share a name.
+    val_fingerprint = hashlib.sha256(
+        "|".join(sorted(r.meta.session_id for r in val_recs)).encode()
+    ).hexdigest()
+
     model = build_model().to(device)
 
     start_epoch = 0
@@ -189,11 +201,20 @@ def main() -> int:
         resume_ckpt = torch.load(args.resume_from, map_location=device, weights_only=True)
         model.load_state_dict(resume_ckpt["model_state_dict"])
         start_epoch = int(resume_ckpt.get("epoch", 0))
-        best_val_loss = float(resume_ckpt.get("val_nll", float("inf")))
-        print(
-            f"train: resumed from {args.resume_from} "
-            f"(epoch {start_epoch}, val_nll={best_val_loss:.4f})"
-        )
+        if resume_ckpt.get("val_fingerprint") == val_fingerprint:
+            best_val_loss = float(resume_ckpt.get("val_nll", float("inf")))
+            print(
+                f"train: resumed from {args.resume_from} (epoch {start_epoch}, "
+                f"val_nll={best_val_loss:.4f}, same validation set -- comparable)"
+            )
+        else:
+            print(
+                f"train: resumed from {args.resume_from} (epoch {start_epoch}) -- "
+                "validation set differs from that checkpoint's (different --data/"
+                "--oxiod-data/--oxiod-carry-positions), so its val_nll is not "
+                "comparable to this run's. Starting best_val_loss fresh at +inf "
+                "instead of silently comparing two different numbers."
+            )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -206,8 +227,15 @@ def main() -> int:
         val_loss = _run_epoch(model, val_loader, None, device) if len(val_loader) else float("nan")
         print(f"epoch {epoch:3d}/{end_epoch}  train_nll={train_loss:.4f}  val_nll={val_loss:.4f}")
 
-        if val_loss < best_val_loss or (len(val_loader) == 0 and epoch == end_epoch):
-            best_val_loss = val_loss
+        # Always save the last epoch too, even if it never beat best_val_loss -- a
+        # resume run must never finish with literally nothing written, whatever the
+        # reason (a raised validation bar, an unlucky loss curve, or a bug we haven't
+        # found yet).
+        is_best = len(val_loader) > 0 and val_loss < best_val_loss
+        is_last = epoch == end_epoch
+        if is_best or is_last:
+            if is_best:
+                best_val_loss = val_loss
             torch.save(
                 {
                     "model_state_dict": model.state_dict(),
@@ -216,11 +244,13 @@ def main() -> int:
                     "window_s": args.window_s,
                     "rate_hz": DEFAULT_RATE_HZ,
                     "seed": args.seed,
+                    "val_fingerprint": val_fingerprint,
+                    "is_best": is_best,
                 },
                 out_path,
             )
 
-    print(f"train: best checkpoint written to {out_path}")
+    print(f"train: checkpoint written to {out_path} (best_val_nll={best_val_loss:.4f})")
     return 0
 
 

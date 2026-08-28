@@ -111,7 +111,7 @@ def generate_report(
             nees_mean = float(np.mean(nees_history))
             low = float(stats.chi2.ppf(0.025, df=n_samples * 2) / n_samples)
             high = float(stats.chi2.ppf(0.975, df=n_samples * 2) / n_samples)
-            nees_consistent = bool(low <= nees_mean <= high)
+            nees_consistent = low <= nees_mean <= high
 
     report = RunReport(
         run_id=run_id,

@@ -186,7 +186,7 @@ def _register_control(app: FastAPI, hub: Hub) -> None:
 
     @app.post("/control/gps")
     async def control_gps(payload: dict[str, bool]) -> dict[str, bool]:
-        hub.set_gps_enabled(bool(payload.get("enabled", True)))
+        hub.set_gps_enabled(payload.get("enabled", True))
         return {"enabled": hub.gps_enabled}
 
     @app.post("/control/replay")

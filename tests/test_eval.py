@@ -93,7 +93,6 @@ def test_generate_report_and_cli(tmp_path: Path) -> None:
     assert code == EXIT_USAGE
 
 
-@pytest.mark.xfail(reason="M2 -- coverage test unimplemented (owner: Sumedha)", strict=True)
 def test_calibration_coverage_of_a_well_calibrated_model_is_about_68_percent() -> None:
     """MANDATORY gate before the model's covariance is allowed to become the filter's R.
 
@@ -107,7 +106,6 @@ def test_calibration_coverage_of_a_well_calibrated_model_is_about_68_percent() -
     assert calibration_coverage(errors, sigmas, k=1.0) == pytest.approx(0.68, abs=0.02)
 
 
-@pytest.mark.xfail(reason="M2 -- coverage test unimplemented (owner: Sumedha)", strict=True)
 def test_calibration_coverage_catches_an_overconfident_model() -> None:
     """Claimed sigma is half the true error scale, so coverage should fall well short."""
     rng = np.random.default_rng(26168)

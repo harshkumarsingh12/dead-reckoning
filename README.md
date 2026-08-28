@@ -186,8 +186,12 @@ Two structural guarantees, both enforced by tests rather than by good intentions
 Past scaffolding. **M3 (ESKF fusion) is fully done.** M4 (the live demo) is nearly
 there — the Android streamer, the gateway, and the entire web UI (live socket, map,
 telemetry strip, post-run report panel) are all implemented and verified against a
-real running stack, not just typechecked. M0/M1 are mostly done; M2 (the learned
-velocity model) hasn't started — it's waiting on RoNIN/OxIOD dataset access.
+real running stack, not just typechecked. M0/M1 are mostly done; **M2's pipeline is
+implemented and unit-tested** (causal TCN, Gaussian-NLL covariance head, random-yaw
+augmentation, the shared `prepare_window`/`resample_uniform` preprocessing, ONNX
+export + int8 quantization, the model-only trajectory baseline, and the calibration
+coverage gate) but **not yet trained on anything real** — it's still waiting on
+RoNIN/OxIOD dataset access, and no own recordings exist yet either.
 
 What's left in M4 needs real-world inputs, not more code: the actual SIH venue's
 bounding box for the offline tiles (a KIIT-campus practice build already exists and is

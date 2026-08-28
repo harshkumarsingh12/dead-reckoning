@@ -64,19 +64,29 @@ without corrupting heading.
 
 **Target: drift under 5%, calibrated sigma, inference under 10 ms.**
 
-| Deliverable | Owner |
-|---|---|
-| Causal TCN with a Gaussian-NLL covariance head | Sumedha |
-| Random-yaw and carry-position augmentation | Sumedha |
-| Training on RoNIN/OxIOD, fine-tuning on our own walks | Sumedha |
-| ONNX export, int8, benchmarked | Sumedha |
-| Calibration coverage test wired into the harness | Sumedha, Sikruti |
+| Deliverable | Owner | Status |
+|---|---|---|
+| Causal TCN with a Gaussian-NLL covariance head | Sumedha | ✅ Done (code) — untrained, see note |
+| Random-yaw augmentation | Sumedha | ✅ Done (code) — carry-position mixing needs OxIOD, folded into the blocked row below |
+| ONNX export, int8, benchmarked | Sumedha | ✅ Done (code) — real latency number needs a real trained model |
+| Calibration coverage test wired into the harness | Sumedha, Sikruti | ✅ Done (code) — `dr_core.eval.metrics.calibration_coverage`, unverified on real predictions |
+| Model-only trajectory baseline (`ModelOnlyIntegrator`) | Sumedha | ✅ Done (code) — not yet wired into `dr-eval`/`scripts/run_eval.py` (Sikruti's area) |
+| `prepare_window` / `resample_uniform` (shared training+live preprocessing) | Sumedha | ✅ Done — closes the "still open for M2" note above |
+| Training on RoNIN/OxIOD, fine-tuning on our own walks | Sumedha | Blocked — RoNIN/OxIOD access still pending (#14); `load_ronin`/`load_oxiod` are stubs beyond the access check, no real file to verify either schema against; `scripts/train.py` works end-to-end against our own recordings (`load_own_recording`) once any exist (#22, not yet recorded) |
 
 **Done when:** model-only integration beats PDR on held-out data **and** coverage is
 calibrated at roughly 68% within 1σ **and** inference is under budget.
 
 > Export to ONNX on the first checkpoint that trains at all, not at the end. It de-risks
 > on-device inference and turns the latency claim into a measured number.
+
+> The full pipeline (model, loss, augmentation, shared preprocessing, ONNX export,
+> latency benchmark, calibration coverage, model-only trajectory baseline) is
+> implemented and unit-tested against synthetic data, and `scripts/train.py` has been
+> smoke-tested end to end against synthetic own-recording sessions. What is NOT done is
+> training on anything real and therefore any of the "done when" numbers above — no
+> RoNIN/OxIOD access and no own recordings exist yet in this environment. Those numbers
+> are not claimed until actually measured (AGENTS.md: "do not invent numbers").
 
 ---
 

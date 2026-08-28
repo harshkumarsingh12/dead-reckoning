@@ -104,7 +104,7 @@ and a 10 s stop produces zero position creep.
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Android IMU streamer, capture-time stamping, WS uplink | Harsh | ✅ Done — code verified, real on-device test still pending |
+| Android IMU streamer, capture-time stamping, WS uplink | Harsh | ✅ Done — verified on a real device over USB (`adb reverse`): stable `/ingest` socket, no reconnect churn. Found and fixed two real bugs the code review missed: `HIGH_SAMPLING_RATE_SENSORS` permission (Android 12+ needs it for `SENSOR_DELAY_FASTEST`) and a network-security-config that only ever matched literal addresses, never a real LAN IP |
 | Gateway: ingest, broadcast, control | Harsh | ✅ Done — `/live` is a GPS-passthrough placeholder pending the live ESKF |
 | Golden-run replay through the identical pipeline | Harsh | Blocked — needs `dr_core.io.SessionReader` (Sristee, M0); deliberately waiting rather than duplicating her schema |
 | Offline MBTiles built and verified with Wi-Fi off | Harsh | ✅ Done for the KIIT practice loop — 582 real tiles, zero non-localhost requests observed while rendering; needs the actual SIH venue's bbox once announced |

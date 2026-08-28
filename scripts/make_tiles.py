@@ -33,7 +33,7 @@ from services.gateway.tiles import build_mbtiles, tiles_for_bbox
 
 DEFAULT_MAX_TILES = 2000
 REQUEST_DELAY_S = 0.1
-USER_AGENT = "sih26168-dead-reckoning-tile-fetcher/0.1 (SIH 2026 hackathon demo prep)"
+USER_AGENT = "dead-reckoning-tile-fetcher/0.1 (SIH 2026 hackathon demo prep)"
 DEFAULT_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 

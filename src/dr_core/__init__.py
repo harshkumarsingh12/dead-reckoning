@@ -1,4 +1,4 @@
-"""dr_core — shared core for GPS-denied pedestrian dead reckoning (SIH26168).
+"""dr_core — shared core for GPS-denied pedestrian dead reckoning.
 
 This package is imported by BOTH the offline training pipeline and the live demo
 pipeline. That is deliberate and load-bearing: any divergence between how training

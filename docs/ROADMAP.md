@@ -7,9 +7,11 @@ Exit criteria are copied verbatim from [BUILD_PLAN.md](BUILD_PLAN.md) §10. They
 acceptance criteria, not aspirations: each one has a `strict=True` xfail test carrying
 its owner, and CI prints the remaining count as a burndown table on every run.
 
-> **Dates are not filled in.** Set them from the actual SIH internal-hackathon and
-> grand-finale dates and commit that in the same PR — a roadmap with no dates on it
-> stops being a plan and becomes a wish list.
+> **Milestone Schedule:**
+> - **M0 & M1 (Harness, Clocks & Baselines):** 27–28 Aug 2026 ✅
+> - **M2 & M3 (Learned Velocity & ESKF Fusion):** 28–29 Aug 2026
+> - **M4 (Hardened Live Demo & Venue Offline MBTiles):** 29–30 Aug 2026
+> - **M5 (Stage Rehearsal & Grand Finale Demo):** 30–31 Aug 2026
 
 ---
 

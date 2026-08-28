@@ -60,7 +60,7 @@ def create_app(
             None disables the ``/reports`` route.
     """
     app = FastAPI(
-        title="SIH26168 dead-reckoning gateway",
+        title="Dead-reckoning gateway",
         version=__version__,
         docs_url="/docs",
     )

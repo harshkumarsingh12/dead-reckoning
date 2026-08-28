@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dr-core"
 version = "0.1.0"
-description = "GPS-denied pedestrian dead reckoning — shared core (SIH26168, ISRO)"
+description = "GPS-denied pedestrian dead reckoning — shared core (Theme: Space Technology)"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "SIH26168 Team" }]
+authors = [{ name = "Dead Reckoning Team" }]
 # Pinned to 3.11: torch / onnxruntime wheels are not reliably published for 3.12+
 # at the time of writing, and every member must be on the same interpreter or the
 # shared preprocessing guarantee is worthless. See CONTRIBUTING.md.

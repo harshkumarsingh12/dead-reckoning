@@ -1,5 +1,5 @@
-# SIH26168 Build Plan v2
-## GPS-Denied Pedestrian Dead Reckoning (ISRO)
+# Build Plan v2
+## GPS-Denied Pedestrian Dead Reckoning (Theme: Space Technology)
 ### Integrated: original plan + principal engineering review (27 Aug 2026)
 
 ---

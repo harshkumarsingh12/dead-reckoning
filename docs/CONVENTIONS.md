@@ -194,7 +194,7 @@ they have to be debuggable from a browser console at 2 a.m.
 
 ## 7. Randomness
 
-Seed is `26168` — the problem statement number — everywhere a seed is needed. Use
+Seed is `26168` everywhere a seed is needed. Use
 `np.random.default_rng(seed)`, never the global `np.random.*` functions: global state
 makes a run reproducible only until someone adds a call above yours.
 

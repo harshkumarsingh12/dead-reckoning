@@ -68,7 +68,7 @@ def build_mbtiles(
     bounds: tuple[float, float, float, float],
     minzoom: int,
     maxzoom: int,
-    name: str = "sih26168-demo",
+    name: str = "dead-reckoning-demo",
     tile_format: str = "png",
 ) -> int:
     """Write a valid MBTiles file (the ``tiles`` table plus the required ``metadata``).

@@ -16,6 +16,10 @@ live-demo underperformance rather than as an error.
 ``dr_core.datasets.load_oxiod``). At least one of the two is required. RoNIN loading
 (``dr_core.datasets.load_ronin``) is not implemented yet -- no real file to verify its
 on-disk schema against (see ``src/dr_core/datasets/loaders.py``).
+
+Window-building (``dr_core.datasets.windowing``) is shared with
+``scripts/evaluate_model.py`` -- training and evaluation must build windows the exact
+same way, or a good eval number stops meaning anything.
 """
 
 from __future__ import annotations
@@ -29,133 +33,14 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from dr_core.ahrs import AhrsFilter, MagGate
-from dr_core.datasets import Recording, load_own_recording, load_oxiod, split_by_trajectory
-from dr_core.models.tcn import IN_CHANNELS, augment_random_yaw, build_model, gaussian_nll_loss
-from dr_core.preprocess import (
-    DEFAULT_HOP_S,
-    DEFAULT_RATE_HZ,
-    CalibrationResult,
-    heading_rad,
-    prepare_window,
-    rotate_world_to_dev,
-)
+from dr_core.datasets import build_dataset, load_combined_recordings, split_by_trajectory
+from dr_core.models.tcn import augment_random_yaw, build_model, gaussian_nll_loss
+from dr_core.preprocess import DEFAULT_HOP_S, DEFAULT_RATE_HZ
 
 if TYPE_CHECKING:
     import numpy.typing as npt
 
-    from dr_core.types import OrientationEstimate, Trajectory
-
     Array = npt.NDArray[np.float64]
-    IntArray = npt.NDArray[np.int64]
-
-
-def _orientations_for_recording(recording: Recording, rate_hz: float) -> list[OrientationEstimate]:
-    """Run the AHRS over one recording's raw IMU using its own session calibration.
-
-    ``accel_bias_body`` has no source in ``SessionMeta`` -- the calibration ritual
-    (data/README.md) only measures gyro bias and magnetometer hard iron, so zero is not
-    a guess here, it is what the documented ritual actually calibrates. Same for a
-    missing ``gyro_bias_body`` / ``mag_hard_iron_body``: treated as already zero-bias
-    rather than invented.
-    """
-    meta = recording.meta
-    calibration = CalibrationResult(
-        gyro_bias_body=(meta.gyro_bias_body if meta.gyro_bias_body is not None else np.zeros(3)),
-        accel_bias_body=np.zeros(3),
-        mag_hard_iron_body=(
-            meta.mag_hard_iron_body if meta.mag_hard_iron_body is not None else np.zeros(3)
-        ),
-    )
-    mag_gate = MagGate(calibration.expected_field_strength_t, calibration.expected_dip_rad)
-    ahrs = AhrsFilter(calibration, mag_gate, rate_hz=rate_hz)
-    return [ahrs.update(sample) for sample in recording.imu]
-
-
-def _velocity_from_truth(truth: Trajectory) -> tuple[IntArray, Array]:
-    """World-frame velocity between consecutive truth points, attributed to the END of
-    each interval -- causal, matching a window's own "ends at now" convention."""
-    t_s = truth.t_ns.astype(np.float64) / 1.0e9
-    dt_s = np.diff(t_s)
-    dp = np.diff(truth.p_world, axis=0)
-    v_world = dp / dt_s[:, None]
-    return truth.t_ns[1:], v_world
-
-
-def _windows_for_recording(
-    recording: Recording,
-    orientations: list[OrientationEstimate],
-    window_s: float,
-    hop_s: float,
-    rate_hz: float,
-) -> tuple[Array, Array]:
-    """Slide causal windows across one recording, paired with a device-frame target
-    velocity interpolated from the ground truth at each window's end time."""
-    window_samples = round(window_s * rate_hz)
-    empty = (np.empty((0, IN_CHANNELS, window_samples)), np.empty((0, 2)))
-
-    if recording.truth is None or len(recording.truth) < 2 or len(recording.imu) < 2:
-        return empty
-
-    t_ns = np.array([s.t_ns for s in recording.imu], dtype=np.int64)
-    t_v_ns, v_world = _velocity_from_truth(recording.truth)
-
-    window_ns = int(window_s * 1.0e9)
-    hop_ns = int(hop_s * 1.0e9)
-    lookback_ns = int(window_s * 1.5 * 1.0e9)  # margin so resampling never runs short
-
-    windows: list[Array] = []
-    targets: list[Array] = []
-
-    t_end = t_ns[0] + window_ns
-    while t_end <= t_ns[-1]:
-        lo = int(np.searchsorted(t_ns, t_end - lookback_ns, side="left"))
-        hi = int(np.searchsorted(t_ns, t_end, side="right"))
-        if hi - lo < 2:
-            t_end += hop_ns
-            continue
-
-        try:
-            window = prepare_window(
-                recording.imu[lo:hi], orientations[lo:hi], rate_hz=rate_hz, window_s=window_s
-            )
-        except ValueError:
-            t_end += hop_ns
-            continue
-
-        v_world_now = np.array(
-            [np.interp(t_end, t_v_ns, v_world[:, 0]), np.interp(t_end, t_v_ns, v_world[:, 1])]
-        )
-        psi_now = heading_rad(np.asarray(orientations[hi - 1].q_world_body, dtype=np.float64))
-        target = rotate_world_to_dev(v_world_now, psi_now)
-
-        windows.append(window)
-        targets.append(target)
-        t_end += hop_ns
-
-    if not windows:
-        return empty
-    return np.stack(windows), np.stack(targets)
-
-
-def _build_dataset(
-    recordings: list[Recording], window_s: float, hop_s: float, rate_hz: float
-) -> tuple[Array, Array]:
-    window_samples = round(window_s * rate_hz)
-    all_windows: list[Array] = []
-    all_targets: list[Array] = []
-    for recording in recordings:
-        if recording.truth is None:
-            continue
-        orientations = _orientations_for_recording(recording, rate_hz=rate_hz)
-        windows, targets = _windows_for_recording(recording, orientations, window_s, hop_s, rate_hz)
-        if windows.shape[0] > 0:
-            all_windows.append(windows)
-            all_targets.append(targets)
-
-    if not all_windows:
-        return np.empty((0, IN_CHANNELS, window_samples)), np.empty((0, 2))
-    return np.concatenate(all_windows, axis=0), np.concatenate(all_targets, axis=0)
 
 
 class _WindowDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
@@ -218,12 +103,18 @@ def main() -> int:
         default=None,
         help="subset of OxIOD carry-position folders (default: all except the official test split)",
     )
-    parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--epochs", type=int, default=60, help="additional epochs to run")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--window-s", type=float, default=1.0)
     parser.add_argument("--out", default="models/tcn.pt")
     parser.add_argument("--seed", type=int, default=26168)
+    parser.add_argument(
+        "--resume-from",
+        default=None,
+        help="checkpoint to resume from -- --epochs is how many MORE epochs to run "
+        "beyond the checkpoint's own epoch count",
+    )
     parser.add_argument(
         "--no-yaw-aug",
         action="store_true",
@@ -238,26 +129,14 @@ def main() -> int:
 
     torch.manual_seed(args.seed)
 
-    recordings: list[Recording] = []
-
-    if args.data is not None:
-        data_root = Path(args.data)
-        session_paths = sorted(data_root.rglob("*.jsonl.gz"))
-        if not session_paths:
-            print(f"train: no *.jsonl.gz recordings found under {data_root}", file=sys.stderr)
-        recordings.extend(load_own_recording(path) for path in session_paths)
-        print(f"train: loaded {len(session_paths)} of our own recordings from {data_root}")
-
-    if args.oxiod_data is not None:
-        try:
-            oxiod_recordings = load_oxiod(
-                Path(args.oxiod_data), carry_positions=args.oxiod_carry_positions
-            )
-        except FileNotFoundError as e:
-            print(f"train: {e}", file=sys.stderr)
-            return 2
-        print(f"train: loaded {len(oxiod_recordings)} OxIOD recordings")
-        recordings.extend(oxiod_recordings)
+    try:
+        recordings = load_combined_recordings(
+            args.data, args.oxiod_data, args.oxiod_carry_positions
+        )
+    except FileNotFoundError as e:
+        print(f"train: {e}", file=sys.stderr)
+        return 2
+    print(f"train: loaded {len(recordings)} recordings")
 
     with_truth = [r for r in recordings if r.truth is not None]
     if not with_truth:
@@ -273,8 +152,8 @@ def main() -> int:
         f"train: {len(train_recs)} train / {len(val_recs)} val / {len(_test_recs)} test recordings"
     )
 
-    x_train, y_train = _build_dataset(train_recs, args.window_s, DEFAULT_HOP_S, DEFAULT_RATE_HZ)
-    x_val, y_val = _build_dataset(val_recs, args.window_s, DEFAULT_HOP_S, DEFAULT_RATE_HZ)
+    x_train, y_train = build_dataset(train_recs, args.window_s, DEFAULT_HOP_S, DEFAULT_RATE_HZ)
+    x_val, y_val = build_dataset(val_recs, args.window_s, DEFAULT_HOP_S, DEFAULT_RATE_HZ)
     if x_train.shape[0] == 0:
         print(
             "train: zero training windows were built -- recordings may be too short "
@@ -303,18 +182,31 @@ def main() -> int:
     )
 
     model = build_model().to(device)
+
+    start_epoch = 0
+    best_val_loss = float("inf")
+    if args.resume_from is not None:
+        resume_ckpt = torch.load(args.resume_from, map_location=device, weights_only=True)
+        model.load_state_dict(resume_ckpt["model_state_dict"])
+        start_epoch = int(resume_ckpt.get("epoch", 0))
+        best_val_loss = float(resume_ckpt.get("val_nll", float("inf")))
+        print(
+            f"train: resumed from {args.resume_from} "
+            f"(epoch {start_epoch}, val_nll={best_val_loss:.4f})"
+        )
+
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    best_val_loss = float("inf")
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    for epoch in range(1, args.epochs + 1):
+    end_epoch = start_epoch + args.epochs
+    for epoch in range(start_epoch + 1, end_epoch + 1):
         train_loss = _run_epoch(model, train_loader, optimizer, device)
         val_loss = _run_epoch(model, val_loader, None, device) if len(val_loader) else float("nan")
-        print(f"epoch {epoch:3d}/{args.epochs}  train_nll={train_loss:.4f}  val_nll={val_loss:.4f}")
+        print(f"epoch {epoch:3d}/{end_epoch}  train_nll={train_loss:.4f}  val_nll={val_loss:.4f}")
 
-        if val_loss < best_val_loss or (len(val_loader) == 0 and epoch == args.epochs):
+        if val_loss < best_val_loss or (len(val_loader) == 0 and epoch == end_epoch):
             best_val_loss = val_loss
             torch.save(
                 {
@@ -323,6 +215,7 @@ def main() -> int:
                     "val_nll": val_loss,
                     "window_s": args.window_s,
                     "rate_hz": DEFAULT_RATE_HZ,
+                    "seed": args.seed,
                 },
                 out_path,
             )

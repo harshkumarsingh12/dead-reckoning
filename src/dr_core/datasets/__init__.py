@@ -25,13 +25,25 @@ from dr_core.datasets.loaders import (
 )
 from dr_core.datasets.sensor_logger import ConversionResult
 from dr_core.datasets.sensor_logger import convert as convert_sensor_logger_export
+from dr_core.datasets.windowing import (
+    build_dataset,
+    load_combined_recordings,
+    orientations_for_recording,
+    velocity_from_truth,
+    windows_for_recording,
+)
 
 __all__ = [
     "ConversionResult",
     "Recording",
+    "build_dataset",
     "convert_sensor_logger_export",
+    "load_combined_recordings",
     "load_own_recording",
     "load_oxiod",
     "load_ronin",
+    "orientations_for_recording",
     "split_by_trajectory",
+    "velocity_from_truth",
+    "windows_for_recording",
 ]

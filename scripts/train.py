@@ -4,7 +4,7 @@
 OWNER: Sumedha  |  MILESTONE: M2
 
     pip install -e ".[ml]"
-    python scripts/train.py --data data/own --epochs 60 --out models/tcn.pt
+    python scripts/train.py --data data/own --oxiod-data data/oxiod --epochs 60 --out models/tcn.pt
 
 Imports dr_core.preprocess -- the SAME module the live pipeline imports. If you ever
 find yourself preparing data any other way here, stop: that divergence is the exact
@@ -12,10 +12,10 @@ failure the shared module exists to prevent, and it will show up as an unexplain
 live-demo underperformance rather than as an error.
 
 ``--data`` is a directory searched for our own recordings (``*.jsonl.gz``, written by
-``dr_core.io.SessionWriter``). RoNIN/OxIOD loading (``dr_core.datasets.load_ronin`` /
-``load_oxiod``) is not implemented yet -- no access, no real file to verify either
-dataset's on-disk schema against (see ``src/dr_core/datasets/loaders.py``) -- so this
-entrypoint cannot train against them until that lands.
+``dr_core.io.SessionWriter``). ``--oxiod-data`` is an OxIOD root (see
+``dr_core.datasets.load_oxiod``). At least one of the two is required. RoNIN loading
+(``dr_core.datasets.load_ronin``) is not implemented yet -- no real file to verify its
+on-disk schema against (see ``src/dr_core/datasets/loaders.py``).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from dr_core.ahrs import AhrsFilter, MagGate
-from dr_core.datasets import Recording, load_own_recording, split_by_trajectory
+from dr_core.datasets import Recording, load_own_recording, load_oxiod, split_by_trajectory
 from dr_core.models.tcn import IN_CHANNELS, augment_random_yaw, build_model, gaussian_nll_loss
 from dr_core.preprocess import (
     DEFAULT_HOP_S,
@@ -207,7 +207,14 @@ def _run_epoch(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", required=True, help="dataset root")
+    parser.add_argument("--data", default=None, help="directory of our own recordings (*.jsonl.gz)")
+    parser.add_argument("--oxiod-data", default=None, help="OxIOD dataset root")
+    parser.add_argument(
+        "--oxiod-carry-positions",
+        nargs="*",
+        default=None,
+        help="subset of OxIOD carry-position folders (default: all except the official test split)",
+    )
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -222,28 +229,38 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    torch.manual_seed(args.seed)
-
-    data_root = Path(args.data)
-    session_paths = sorted(data_root.rglob("*.jsonl.gz"))
-    if not session_paths:
-        print(
-            f"train: no *.jsonl.gz recordings found under {data_root}. RoNIN/OxIOD "
-            "loading is not implemented yet (dr_core.datasets.load_ronin / load_oxiod "
-            "-- see their docstrings); point --data at a directory of our own "
-            "recordings (dr_core.io.SessionWriter output) instead, or record one "
-            "first (data/README.md).",
-            file=sys.stderr,
-        )
+    if args.data is None and args.oxiod_data is None:
+        print("train: pass --data, --oxiod-data, or both -- nothing to train on", file=sys.stderr)
         return 2
 
-    recordings = [load_own_recording(path) for path in session_paths]
+    torch.manual_seed(args.seed)
+
+    recordings: list[Recording] = []
+
+    if args.data is not None:
+        data_root = Path(args.data)
+        session_paths = sorted(data_root.rglob("*.jsonl.gz"))
+        if not session_paths:
+            print(f"train: no *.jsonl.gz recordings found under {data_root}", file=sys.stderr)
+        recordings.extend(load_own_recording(path) for path in session_paths)
+        print(f"train: loaded {len(session_paths)} of our own recordings from {data_root}")
+
+    if args.oxiod_data is not None:
+        try:
+            oxiod_recordings = load_oxiod(
+                Path(args.oxiod_data), carry_positions=args.oxiod_carry_positions
+            )
+        except FileNotFoundError as e:
+            print(f"train: {e}", file=sys.stderr)
+            return 2
+        print(f"train: loaded {len(oxiod_recordings)} OxIOD recordings")
+        recordings.extend(oxiod_recordings)
+
     with_truth = [r for r in recordings if r.truth is not None]
     if not with_truth:
         print(
-            f"train: {len(recordings)} recording(s) found under {data_root}, but none "
-            "carry GPS-derived ground truth -- nothing to train velocity labels "
-            "against.",
+            f"train: {len(recordings)} recording(s) loaded, but none carry ground "
+            "truth -- nothing to train velocity labels against.",
             file=sys.stderr,
         )
         return 2

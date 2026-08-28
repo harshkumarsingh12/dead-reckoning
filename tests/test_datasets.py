@@ -1,11 +1,10 @@
-"""Unit tests for dataset loading: our own recordings and the trajectory split.
+"""Unit tests for dataset loading: our own recordings, OxIOD, and the trajectory split.
 
 Spec: docs/BUILD_PLAN.md section 4  |  OWNER: Sumedha  |  MILESTONE: M0
 
-RoNIN/OxIOD parsing itself is not tested here -- it is not implemented (no access, no
-real file to verify a schema against; see loaders.py). These cover what IS implemented:
-the access-request guard, our own session format round-trip, the Recording properties,
-and the trajectory-level split.
+RoNIN parsing itself is not tested here -- it is not implemented (no real file to
+verify a schema against; see loaders.py). OxIOD's fixture below copies the exact column
+layout verified against a real downloaded file, not the dataset's sparse docs.
 """
 
 from __future__ import annotations
@@ -57,6 +56,71 @@ def test_load_ronin_stops_short_of_a_guess_once_the_root_exists(tmp_path: Path) 
     (tmp_path / "ronin_root").mkdir()
     with pytest.raises(NotImplementedError):
         load_ronin(tmp_path / "ronin_root")
+
+
+def _write_oxiod_trial(syn_dir: Path, index: int, n: int = 5) -> None:
+    """One synthetic imu/vi pair, in OxIOD's real verified column layout: 16 columns
+    (dummy time, attitude x3 [unused], rotation_rate x3, gravity x3, user_acc x3,
+    magnetic_field x3) and 9 columns (dummy time, frame idx [unused], position x3,
+    quaternion x4 [unused]), no header, row-aligned."""
+    syn_dir.mkdir(parents=True, exist_ok=True)
+    imu_lines = [
+        "1.50E+11,0,0,0,0.01,0.02,0.01,0.0,0.0,-1.0,0.0,0.0,0.0,-40.0,2.0,-18.0" for _ in range(n)
+    ]
+    vi_lines = [f"1.50E+11,{1000 + i},{0.1 * i},{0.2 * i},1.0,0.0,0.0,0.0,1.0" for i in range(n)]
+    (syn_dir / f"imu{index}.csv").write_text("\n".join(imu_lines) + "\n")
+    (syn_dir / f"vi{index}.csv").write_text("\n".join(vi_lines) + "\n")
+
+
+def _write_oxiod_dataset(root: Path) -> Path:
+    base = root / "Oxford Inertial Odometry Dataset"
+    _write_oxiod_trial(base / "handheld" / "data1" / "syn", index=1)
+    _write_oxiod_trial(base / "handheld" / "data1" / "syn", index=2)
+    _write_oxiod_trial(base / "pocket" / "data1" / "syn", index=1)
+    _write_oxiod_trial(base / "test" / "large-scale" / "syn", index=1)  # excluded by default
+    return root
+
+
+def test_load_oxiod_reconstructs_gravity_inclusive_accel(tmp_path: Path) -> None:
+    """gravity (G) + user_acc (G), summed and converted to m/s^2 -- the fixture's
+    gravity=(0,0,-1) G with zero user_acc must come back as |a_body| = 9.80665."""
+    root = _write_oxiod_dataset(tmp_path)
+    recordings = load_oxiod(root, carry_positions=["handheld"])
+
+    assert len(recordings) == 2  # imu1 + imu2 under handheld/data1/syn
+    r = recordings[0]
+    assert r.meta.carry_position == CarryPosition.HAND
+    assert r.meta.imu_rate_hz == pytest.approx(100.0)
+    assert np.linalg.norm(r.imu[0].a_body) == pytest.approx(9.80665, abs=1e-3)
+
+
+def test_load_oxiod_converts_magnetometer_microtesla_to_tesla(tmp_path: Path) -> None:
+    root = _write_oxiod_dataset(tmp_path)
+    recordings = load_oxiod(root, carry_positions=["handheld"])
+    assert recordings[0].imu[0].m_body[0] == pytest.approx(-40.0e-6)
+
+
+def test_load_oxiod_maps_folder_names_to_carry_positions(tmp_path: Path) -> None:
+    root = _write_oxiod_dataset(tmp_path)
+    recordings = load_oxiod(root, carry_positions=["handheld", "pocket"])
+    carries = {r.meta.carry_position for r in recordings}
+    assert carries == {CarryPosition.HAND, CarryPosition.POCKET}
+
+
+def test_load_oxiod_truth_is_planar_and_row_aligned_with_imu(tmp_path: Path) -> None:
+    root = _write_oxiod_dataset(tmp_path)
+    r = load_oxiod(root, carry_positions=["handheld"])[0]
+    assert r.truth is not None
+    assert r.truth.p_world.shape == (5, 2)
+    assert len(r.truth) == len(r.imu)
+
+
+def test_load_oxiod_excludes_the_official_test_split_by_default(tmp_path: Path) -> None:
+    """ "test/" is the dataset's own held-out split -- left alone as a genuine held-out
+    set rather than silently folded into training."""
+    root = _write_oxiod_dataset(tmp_path)
+    recordings = load_oxiod(root)  # no carry_positions filter
+    assert len(recordings) == 3  # 2 handheld + 1 pocket; "test" is not a recognised key
 
 
 def test_load_own_recording_round_trips_imu_and_gps(tmp_path: Path) -> None:

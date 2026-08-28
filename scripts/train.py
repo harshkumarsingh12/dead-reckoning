@@ -187,12 +187,15 @@ def _run_epoch(
     model: torch.nn.Module,
     loader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
     optimizer: torch.optim.Optimizer | None,
+    device: torch.device,
 ) -> float:
     training = optimizer is not None
     model.train(training)
     total_loss = 0.0
     total_n = 0
     for windows, targets in loader:
+        windows = windows.to(device, non_blocking=True)
+        targets = targets.to(device, non_blocking=True)
         with torch.set_grad_enabled(training):
             pred = model(windows)[:, :, -1]  # last (current) time step
             loss = gaussian_nll_loss(pred, targets)
@@ -281,18 +284,25 @@ def main() -> int:
         return 2
     print(f"train: {x_train.shape[0]} train windows, {x_val.shape[0]} val windows")
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device_name = torch.cuda.get_device_name(0) if device.type == "cuda" else "cpu"
+    print(f"train: using device {device} ({device_name})")
+    pin_memory = device.type == "cuda"
+
     train_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = DataLoader(
         _WindowDataset(x_train, y_train, augment=not args.no_yaw_aug, seed=args.seed),
         batch_size=args.batch_size,
         shuffle=True,
+        pin_memory=pin_memory,
     )
     val_loader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = DataLoader(
         _WindowDataset(x_val, y_val, augment=False, seed=args.seed),
         batch_size=args.batch_size,
         shuffle=False,
+        pin_memory=pin_memory,
     )
 
-    model = build_model()
+    model = build_model().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     best_val_loss = float("inf")
@@ -300,8 +310,8 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     for epoch in range(1, args.epochs + 1):
-        train_loss = _run_epoch(model, train_loader, optimizer)
-        val_loss = _run_epoch(model, val_loader, None) if len(val_loader) else float("nan")
+        train_loss = _run_epoch(model, train_loader, optimizer, device)
+        val_loss = _run_epoch(model, val_loader, None, device) if len(val_loader) else float("nan")
         print(f"epoch {epoch:3d}/{args.epochs}  train_nll={train_loss:.4f}  val_nll={val_loss:.4f}")
 
         if val_loss < best_val_loss or (len(val_loader) == 0 and epoch == args.epochs):

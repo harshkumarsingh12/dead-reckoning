@@ -39,7 +39,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "hypothesis>=6.100",
-    "ruff>=0.5",
+    "ruff==0.16.5",  # pinned exactly -- must match .pre-commit-config.yaml's ruff rev (#63)
     "mypy>=1.10",
     "pre-commit>=3.7",
     "httpx>=0.27",          # FastAPI TestClient; also scripts/make_tiles.py's fetcher

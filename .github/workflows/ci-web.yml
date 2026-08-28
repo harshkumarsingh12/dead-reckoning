@@ -46,9 +46,15 @@ jobs:
       # The demo runs with the venue network unplugged. A basemap URL pointing at
       # tile.openstreetmap.org survives development happily and dies on stage, so it
       # is a build failure here rather than a discovery at the podium.
+      #
+      # Excludes *.map: Leaflet's own source ships example/attribution URLs
+      # (tile.openstreetmap.org, mapbox.com) as inert comment/constant text, inlined
+      # verbatim into the source map. That text is never executed -- it doesn't cause
+      # a network request -- so it is not the thing this check exists to catch. The
+      # shipped *.js bundle is what actually runs and is what this checks for real.
       - name: No external tile hosts in the bundle
         run: |
-          if grep -rIEl 'https?://[a-z.]*(tile|basemaps|mapbox|maptiler)' dist/; then
+          if grep -rIEl --exclude='*.map' 'https?://[a-z.]*(tile|basemaps|mapbox|maptiler)' dist/; then
             echo "::error::Bundle references an external tile host. Tiles must come "\
                  "from the local MBTiles route. See docs/DEMO_RUNBOOK.md."
             exit 1

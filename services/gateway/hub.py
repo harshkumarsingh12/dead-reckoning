@@ -98,6 +98,8 @@ class Hub:
             state=state,
             gps_enabled=self.gps_enabled,
             distance_travelled_m=self._distance_m,
+            origin_lat_deg=self._origin_deg[0],
+            origin_lon_deg=self._origin_deg[1],
         )
         await self._broadcast(encode_telemetry_frame(frame))
 

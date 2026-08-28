@@ -55,4 +55,11 @@ export interface TelemetryFrame {
   distance_travelled_m: number
   /** The headline number. Null before enough distance has been walked. */
   drift_pct: number | null
+  /**
+   * The world-frame origin, so the browser can convert `p_world` (local ENU metres)
+   * back to lat/lon for the real basemap. Null until the session's first GPS fix
+   * sets an origin (see services/gateway/hub.py). See map/enu.ts for the conversion.
+   */
+  origin_lat_deg: number | null
+  origin_lon_deg: number | null
 }

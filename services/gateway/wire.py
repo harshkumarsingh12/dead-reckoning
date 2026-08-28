@@ -80,4 +80,6 @@ def encode_telemetry_frame(frame: TelemetryFrame) -> dict[str, Any]:
         "gps_enabled": frame.gps_enabled,
         "distance_travelled_m": frame.distance_travelled_m,
         "drift_pct": frame.drift_pct,
+        "origin_lat_deg": frame.origin_lat_deg,
+        "origin_lon_deg": frame.origin_lon_deg,
     }

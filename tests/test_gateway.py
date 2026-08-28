@@ -77,6 +77,20 @@ def test_live_socket_broadcasts_telemetry_frames() -> None:
     assert "nis" in frame
 
 
+def test_live_frame_carries_the_session_origin_from_the_first_gps_fix() -> None:
+    """The map (apps/web/src/map/TrackMap.tsx) cannot convert p_world back to
+    lat/lon without this -- see docs/CONVENTIONS.md section 6 and map/enu.ts."""
+    with (
+        TestClient(create_app()) as client,
+        client.websocket_connect("/live") as live_ws,
+        client.websocket_connect("/ingest") as ingest_ws,
+    ):
+        ingest_ws.send_json(_SAMPLE_GPS_FIX)
+        frame = live_ws.receive_json()
+    assert frame["origin_lat_deg"] == _SAMPLE_GPS_FIX["lat_deg"]
+    assert frame["origin_lon_deg"] == _SAMPLE_GPS_FIX["lon_deg"]
+
+
 def test_gps_toggle_is_reflected_in_the_telemetry_stream() -> None:
     """The demo's central gesture. Judges must see cause and effect immediately."""
     with TestClient(create_app()) as client:

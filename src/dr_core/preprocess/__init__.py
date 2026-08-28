@@ -19,6 +19,7 @@ from dr_core.preprocess.calibrate import (
 )
 from dr_core.preprocess.pipeline import (
     align_gravity,
+    heading_rad,
     prepare_window,
     resample_uniform,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "align_gravity",
     "estimate_gyro_bias",
     "fit_hard_iron",
+    "heading_rad",
     "prepare_window",
     "resample_uniform",
 ]

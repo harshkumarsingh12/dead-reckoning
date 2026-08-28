@@ -108,6 +108,30 @@ def align_gravity(
     return a_world, w_world
 
 
+def heading_rad(q_world_body: Array) -> float:
+    """Yaw of a world<-body quaternion: 0 = East, CCW positive (docs/CONVENTIONS.md).
+
+    Shared by ``prepare_window`` (to find "now"'s heading, for the device-aligned
+    rotation below) and by anything else that needs the same number
+    ``dr_core.ahrs.AhrsFilter.heading_rad`` reports live -- one formula, not two.
+    """
+    w, x, y, z = (float(c) for c in q_world_body)
+    return float(np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)))
+
+
+def _rotate_horizontal_by(vectors: Array, psi_rad: float) -> Array:
+    """Rotate the horizontal (x, y) columns of an (n, 3) world-frame array by -psi.
+
+    The vertical (Up, column 2) component is invariant under a rotation about the
+    vertical axis and is passed through unchanged.
+    """
+    c, s = np.cos(-psi_rad), np.sin(-psi_rad)
+    rot = np.array([[c, -s], [s, c]], dtype=np.float64)
+    out = np.array(vectors, dtype=np.float64, copy=True)
+    out[:, 0:2] = (rot @ out[:, 0:2].T).T
+    return out
+
+
 def prepare_window(
     samples: list[ImuSample],
     orientations: list[OrientationEstimate],
@@ -119,13 +143,19 @@ def prepare_window(
     The window ENDS at the current instant -- no future context. That is what keeps the
     effective model delay near 0.2 s instead of the 0.5-1.0 s a centred window costs.
 
-    Each sample is rotated by ``align_gravity`` (the SAME function the raw-integration
-    baseline uses -- one shared preprocessing path, not a second implementation to drift
-    from). That yields z-true-Up, gravity-removed accel and gyro; the horizontal axes
-    carry whatever heading the AHRS orientation happens to have at that instant, which is
-    exactly the model's device-aligned ``_dev`` frame (docs/CONVENTIONS.md section 1):
-    heading-agnostic not because heading is zeroed out, but because the model is trained
-    (via ``augment_random_yaw``) to be indifferent to whatever it is.
+    Two steps, deliberately kept separate (see ``align_gravity``'s docstring):
+
+    1. Every sample is rotated by ``align_gravity`` (the SAME function the
+       raw-integration baseline uses -- one shared preprocessing path, not a second
+       implementation to drift from) into world ENU, gravity removed.
+    2. The whole window is then rotated by ``-psi_now`` about Up, where ``psi_now`` is
+       the heading at the window's LAST (current) sample -- a single, constant rotation
+       applied uniformly across the window, not a per-sample one, so a window keeps one
+       internally consistent frame even while the person is turning mid-window. This is
+       the model's device-aligned ``_dev`` frame (docs/CONVENTIONS.md section 1):
+       heading-agnostic not because heading is zeroed out, but because ``psi_now``
+       varies window to window (and training additionally scrambles it via
+       ``augment_random_yaw``), so the network cannot learn a fixed absolute heading.
 
     Args:
         samples: raw IMU covering at least ``window_s`` and ending at now.
@@ -154,13 +184,13 @@ def prepare_window(
     if span_s < window_s:
         raise ValueError(f"samples span {span_s:.3f} s, less than the {window_s:.3f} s window")
 
-    a_dev = np.empty((len(samples), 3), dtype=np.float64)
-    w_dev = np.empty((len(samples), 3), dtype=np.float64)
+    a_world = np.empty((len(samples), 3), dtype=np.float64)
+    w_world = np.empty((len(samples), 3), dtype=np.float64)
     for i, (sample, orientation) in enumerate(zip(samples, orientations, strict=True)):
-        a_dev[i], w_dev[i] = align_gravity(sample.a_body, sample.w_body, orientation)
+        a_world[i], w_world[i] = align_gravity(sample.a_body, sample.w_body, orientation)
 
-    t_uniform_ns, a_uniform = resample_uniform(t_ns, a_dev, rate_hz=rate_hz)
-    _, w_uniform = resample_uniform(t_ns, w_dev, rate_hz=rate_hz)
+    t_uniform_ns, a_uniform = resample_uniform(t_ns, a_world, rate_hz=rate_hz)
+    _, w_uniform = resample_uniform(t_ns, w_world, rate_hz=rate_hz)
 
     window_samples = round(window_s * rate_hz)
     if t_uniform_ns.shape[0] < window_samples:
@@ -169,6 +199,7 @@ def prepare_window(
             f"{window_samples} for a {window_s:.3f} s window at {rate_hz:.1f} Hz"
         )
 
-    a_window = a_uniform[-window_samples:]
-    w_window = w_uniform[-window_samples:]
+    psi_now = heading_rad(np.asarray(orientations[-1].q_world_body, dtype=np.float64))
+    a_window = _rotate_horizontal_by(a_uniform[-window_samples:], psi_now)
+    w_window = _rotate_horizontal_by(w_uniform[-window_samples:], psi_now)
     return np.concatenate([a_window.T, w_window.T], axis=0)

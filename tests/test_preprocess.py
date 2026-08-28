@@ -92,6 +92,36 @@ def test_prepare_window_matches_align_gravity_per_sample() -> None:
     np.testing.assert_allclose(w_dev[:, -1], w_expected, atol=1e-9)
 
 
+def _forward_push_stream(
+    n: int, rate_hz: float, psi_rad: float, push_mps2: float = 0.5
+) -> tuple[list[ImuSample], list[OrientationEstimate]]:
+    """A phone held flat, facing a fixed heading, accelerating along its own forward axis."""
+    dt_ns = round(NS_PER_S / rate_hz)
+    q = np.array([np.cos(psi_rad / 2.0), 0.0, 0.0, np.sin(psi_rad / 2.0)])
+    a_body = np.array([push_mps2, 0.0, 9.80665])
+    samples = [
+        ImuSample(t_ns=i * dt_ns, a_body=a_body.copy(), w_body=np.zeros(3)) for i in range(n)
+    ]
+    orientations = [OrientationEstimate(t_ns=s.t_ns, q_world_body=q) for s in samples]
+    return samples, orientations
+
+
+def test_prepare_window_is_heading_agnostic() -> None:
+    """Two sessions facing different absolute directions but identical RELATIVE motion
+    must produce identical device-frame windows -- the RoNIN trick, and the reason
+    align_gravity's docstring says the yaw-removal step belongs here. Facing North
+    instead of East and pushing "forward" must not change the window at all."""
+    east_samples, east_orient = _forward_push_stream(n=250, rate_hz=200.0, psi_rad=0.0)
+    north_samples, north_orient = _forward_push_stream(n=250, rate_hz=200.0, psi_rad=np.pi / 2.0)
+
+    window_east = prepare_window(east_samples, east_orient, rate_hz=200.0, window_s=1.0)
+    window_north = prepare_window(north_samples, north_orient, rate_hz=200.0, window_s=1.0)
+
+    np.testing.assert_allclose(window_east, window_north, atol=1e-9)
+    # And it is not a trivially-zero window -- the push is actually present.
+    assert np.max(np.abs(window_east[0:2])) > 0.1
+
+
 def test_prepare_window_rejects_mismatched_lengths() -> None:
     samples, orientations = _flat_stream(n=250, rate_hz=200.0)
     with pytest.raises(ValueError, match="same length"):

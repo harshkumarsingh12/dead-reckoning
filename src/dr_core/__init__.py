@@ -21,6 +21,8 @@ Layer map (see docs/ARCHITECTURE.md):
 only; tests/test_contract.py enforces this.
 """
 
+from importlib.metadata import version as _installed_version
+
 from dr_core.types import (
     ERROR_STATE_DIM,
     ERROR_STATE_ORDER,
@@ -37,7 +39,12 @@ from dr_core.types import (
     VelocityEstimate,
 )
 
-__version__ = "0.1.0"
+# Read from the installed package metadata rather than hardcoded here AND in
+# pyproject.toml -- two literals is how a release tag ends up not matching what the
+# package actually reports (see .github/workflows/release.yml's version-check step).
+# Caveat inherent to editable installs: this reflects pyproject.toml as of the last
+# `pip install -e .`, not the working tree this instant -- reinstall after bumping it.
+__version__ = _installed_version("dr-core")
 
 __all__ = [
     "ERROR_STATE_DIM",

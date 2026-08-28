@@ -32,6 +32,19 @@ def test_version_is_exported() -> None:
     assert dr_core.__version__
 
 
+def test_version_has_exactly_one_source_of_truth() -> None:
+    """dr_core.__version__ reads installed package metadata rather than a second
+    hardcoded literal (see src/dr_core/__init__.py and .github/workflows/release.yml's
+    tag-check) -- this pins that pyproject.toml is genuinely the only place a version
+    is written down. Needs a reinstall (`pip install -e .`) to pick up a bump; that is
+    an accepted property of editable installs, not a bug this test should paper over.
+    """
+    import tomllib
+
+    pyproject = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
+    assert dr_core.__version__ == pyproject["project"]["version"]
+
+
 def test_imu_sample_is_immutable() -> None:
     """Samples are frozen so nothing downstream can edit history in place."""
     s = ImuSample(t_ns=1, a_body=np.zeros(3), w_body=np.zeros(3))

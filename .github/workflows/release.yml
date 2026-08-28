@@ -31,6 +31,34 @@ jobs:
       - run: mypy
       - run: pytest -q
 
+      # dr_core.__version__ reads installed package metadata (pyproject.toml's
+      # [project].version), so this is really checking the TAG against
+      # pyproject.toml, not against a second hardcoded literal -- there is no second
+      # literal anymore. Skipped on workflow_dispatch: there is no tag to check.
+      - name: Tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          tag_version="${tag_version%%-*}"  # v0.3.0-m3 -> 0.3.0
+          pkg_version=$(python -c "import dr_core; print(dr_core.__version__)")
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} implies version $tag_version but" \
+                 "pyproject.toml's version is $pkg_version -- bump pyproject.toml in" \
+                 "the same PR as (or before) tagging the release."
+            exit 1
+          fi
+
+      # A pinned snapshot of exactly what CI verified this tag against. pyproject.toml
+      # deliberately uses ranges (numpy<2.1, etc.), so "pip install -e ." on demo day
+      # can resolve differently than it did here -- this file is what makes the
+      # release reproducible rather than just tested-once.
+      - name: Freeze the verified dependency set
+        run: pip freeze --exclude-editable > requirements-lock.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: requirements-lock
+          path: requirements-lock.txt
+
   android:
     name: Android APK
     runs-on: ubuntu-latest
@@ -41,11 +69,11 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Assemble
+      - name: Assemble and lint
         working-directory: apps/android
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:assembleDebug --no-daemon
+          ./gradlew :app:assembleDebug :app:lintDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: apk
@@ -88,6 +116,13 @@ jobs:
           if [ -d artifacts/web ]; then
             tar -czf release/web-dist.tar.gz -C artifacts/web .
           fi
+          if [ -f artifacts/requirements-lock/requirements-lock.txt ]; then
+            cp artifacts/requirements-lock/requirements-lock.txt release/
+          fi
+          # Same practice docs/DEMO_RUNBOOK.md already uses by hand for the MBTiles
+          # checksum -- an APK that gets side-loaded onto a phone is exactly the kind
+          # of artifact worth being able to verify untampered.
+          ( cd release && sha256sum * > checksums.txt )
           ls -lh release/
 
       - uses: softprops/action-gh-release@v2
@@ -97,8 +132,12 @@ jobs:
           body: |
             SIH26168 — GPS-denied pedestrian dead reckoning (ISRO).
 
-            Attached: the IMU streamer APK and the offline demo web bundle. Map tiles
-            and datasets are NOT attached — they are regenerated with
+            Attached: the IMU streamer APK, the offline demo web bundle,
+            `requirements-lock.txt` (the exact dependency set CI verified this tag
+            against — pyproject.toml uses ranges, this is the pinned reproduction of
+            what was actually tested), and `checksums.txt` for all of the above.
+
+            Map tiles and datasets are NOT attached — they are regenerated with
             `scripts/make_tiles.py` and `scripts/fetch_datasets.py`.
 
             Metrics for this tag are in `docs/EVALUATION.md`; setup is in

@@ -19,10 +19,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy import stats
 
 from dr_core.eval.metrics import _umeyama_se2, ate, drift_pct, final_error, resample_to, rte
+from dr_core.fusion.gating import nees
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
+
     from dr_core.fusion.gating import NisLogger
     from dr_core.types import Trajectory
 
@@ -40,6 +44,8 @@ class RunReport:
     drift_pct: float
     baseline_drift_pct: dict[str, float] = field(default_factory=dict)
     nis_consistent: dict[str, bool] = field(default_factory=dict)
+    nees_mean: float | None = None
+    nees_consistent: bool | None = None
     coverage_1sigma: float | None = None
     inference_ms_median: float | None = None
     notes: str = ""
@@ -49,10 +55,11 @@ class RunReport:
 
     def summary_line(self) -> str:
         """One line for the terminal and the group chat. The number people repeat."""
+        nees_str = f" | NEES={self.nees_mean:.2f}" if self.nees_mean is not None else ""
         return (
             f"[{self.run_id}] drift={self.drift_pct:.2f}% | ATE={self.ate_m:.2f}m | "
             f"RTE(60s)={self.rte_60s_m:.2f}m | final_err={self.final_error_m:.2f}m | "
-            f"dist={self.distance_m:.1f}m"
+            f"dist={self.distance_m:.1f}m{nees_str}"
         )
 
 
@@ -63,6 +70,7 @@ def generate_report(
     output_dir: Path,
     run_id: str,
     nis_logger: NisLogger | None = None,
+    cov_history: list[npt.NDArray[np.float64]] | None = None,
 ) -> RunReport:
     """Compute every metric and write the plots.
 
@@ -87,6 +95,24 @@ def generate_report(
     baseline_drift = {name: drift_pct(base, truth) for name, base in baselines.items()}
     nis_consistent = nis_logger.is_consistent() if nis_logger is not None else {}
 
+    # Compute offline NEES if covariance history is provided
+    nees_mean: float | None = None
+    nees_consistent: bool | None = None
+    nees_history: list[float] = []
+    if cov_history is not None and len(cov_history) == len(estimate) and len(estimate) > 0:
+        for i in range(len(estimate)):
+            err = estimate.p_world[i] - truth_r.p_world[i]
+            cov = cov_history[i]
+            cov_pos = cov[0:2, 0:2] if cov.shape == (7, 7) else cov
+            nees_history.append(nees(err, cov_pos))
+
+        if nees_history:
+            n_samples = len(nees_history)
+            nees_mean = float(np.mean(nees_history))
+            low = float(stats.chi2.ppf(0.025, df=n_samples * 2) / n_samples)
+            high = float(stats.chi2.ppf(0.975, df=n_samples * 2) / n_samples)
+            nees_consistent = bool(low <= nees_mean <= high)
+
     report = RunReport(
         run_id=run_id,
         distance_m=distance_m,
@@ -97,6 +123,8 @@ def generate_report(
         drift_pct=drift_percent,
         baseline_drift_pct=baseline_drift,
         nis_consistent=nis_consistent,
+        nees_mean=nees_mean,
+        nees_consistent=nees_consistent,
     )
 
     # Plot generation
@@ -174,12 +202,14 @@ def generate_report(
     fig, ax = plt.subplots(figsize=(10, 5))
     has_nis_data = False
     if nis_logger is not None:
-        for ch, stats in nis_logger._channels.items():
-            if stats.nis_history:
+        for ch, ch_stats in nis_logger._channels.items():
+            if ch_stats.nis_history:
                 has_nis_data = True
-                samples = np.arange(len(stats.nis_history))
-                ax.plot(samples, stats.nis_history, label=f"{ch} (dof={stats.dof})", alpha=0.7)
-                _low, high = stats.bounds
+                samples = np.arange(len(ch_stats.nis_history))
+                ax.plot(
+                    samples, ch_stats.nis_history, label=f"{ch} (dof={ch_stats.dof})", alpha=0.7
+                )
+                _low, high = ch_stats.bounds
                 ax.axhline(high, linestyle=":", alpha=0.5, label=f"{ch} 95% bound ({high:.2f})")
 
     if not has_nis_data:
@@ -200,7 +230,36 @@ def generate_report(
     fig.savefig(output_dir / "nis.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-    # 5. JSON report
+    # 5. NEES plot (if covariance history provided)
+    if cov_history is not None and nees_history:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        samples = np.arange(len(nees_history))
+        ax.plot(samples, nees_history, "m-", label="Position NEES (dof=2)", alpha=0.7)
+        low_bound = float(stats.chi2.ppf(0.025, df=len(nees_history) * 2) / len(nees_history))
+        high_bound = float(stats.chi2.ppf(0.975, df=len(nees_history) * 2) / len(nees_history))
+        ax.axhline(
+            high_bound, color="r", linestyle=":", alpha=0.7, label=f"97.5% Bound ({high_bound:.2f})"
+        )
+        ax.axhline(
+            low_bound, color="b", linestyle=":", alpha=0.7, label=f"2.5% Bound ({low_bound:.2f})"
+        )
+        if nees_mean is not None:
+            ax.axhline(
+                nees_mean,
+                color="k",
+                linestyle="--",
+                alpha=0.6,
+                label=f"Mean NEES = {nees_mean:.2f}",
+            )
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.set_title(f"NEES Consistency (Offline) — {run_id}")
+        ax.set_xlabel("Sample Index")
+        ax.set_ylabel("Normalized Estimation Error Squared")
+        ax.legend()
+        fig.savefig(output_dir / "nees.png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+    # 6. JSON report
     (output_dir / "report.json").write_text(report.to_json(), encoding="utf-8")
 
     return report

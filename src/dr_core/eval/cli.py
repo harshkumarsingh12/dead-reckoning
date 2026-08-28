@@ -16,12 +16,18 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
 
 from dr_core import __version__
 from dr_core.eval.report import generate_report
 from dr_core.fusion.eskf import Eskf
 from dr_core.timebase.reorder import DEFAULT_LAG_NS, ReorderBuffer
 from dr_core.types import GpsFix, ImuSample, Trajectory
+
+if TYPE_CHECKING:
+    import numpy.typing as npt
 
 EXIT_OK = 0
 EXIT_TARGET_MISSED = 1
@@ -93,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     t_list: list[int] = []
     p_list: list[list[float]] = []
     psi_list: list[float] = []
+    cov_list: list[npt.NDArray[np.float64]] = []
 
     gps_t: list[int] = []
     gps_p: list[list[float]] = []
@@ -104,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             t_list.append(st.t_ns)
             p_list.append([float(st.p_world[0]), float(st.p_world[1])])
             psi_list.append(st.psi_rad)
+            cov_list.append(st.cov[0:2, 0:2].copy())
         elif itype == "gps" and isinstance(ipayload, GpsFix):
             if not args.no_gps:
                 eskf.update_gps(ipayload)
@@ -137,8 +145,6 @@ def main(argv: list[str] | None = None) -> int:
         print("dr-eval: recording contained no valid IMU samples", file=sys.stderr)
         return EXIT_USAGE
 
-    import numpy as np
-
     estimate = Trajectory(
         t_ns=np.array(t_list, dtype=np.int64),
         p_world=np.array(p_list, dtype=np.float64),
@@ -161,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.out,
         run_id=meta.session_id if hasattr(meta, "session_id") else "eval_run",
         nis_logger=eskf._nis_logger,
+        cov_history=cov_list,
     )
 
     print(report.summary_line())

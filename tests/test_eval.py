@@ -112,3 +112,43 @@ def test_calibration_coverage_catches_an_overconfident_model() -> None:
     errors = rng.normal(0.0, 0.4, 20_000)
     sigmas = np.full(20_000, 0.2)
     assert calibration_coverage(errors, sigmas, k=1.0) < 0.45
+
+
+def test_nees_with_known_covariance() -> None:
+    """NEES of errors drawn from their claimed covariance must average near DOF."""
+    from dr_core.fusion.gating import nees
+
+    rng = np.random.default_rng(26168)
+    cov = np.array([[0.5, 0.1], [0.1, 0.3]], dtype=np.float64)
+    l_mat = np.linalg.cholesky(cov)
+
+    n_samples = 2000
+    std_norm = rng.standard_normal((2, n_samples))
+    errors = (l_mat @ std_norm).T
+
+    nees_values = [nees(e, cov) for e in errors]
+    mean_nees = float(np.mean(nees_values))
+    # For 2-DoF error, mean NEES should be ~2.0
+    assert mean_nees == pytest.approx(2.0, rel=0.08)
+
+
+def test_generate_report_with_cov_history_and_nees(tmp_path: Path) -> None:
+    """generate_report computes NEES and writes nees.png when cov_history is provided."""
+    from dr_core.eval.report import generate_report
+
+    truth = _line(n=20, step=1.0, label="truth")
+    est = Trajectory(t_ns=truth.t_ns, p_world=truth.p_world + 0.05, label="est")
+    cov_history = [np.diag([0.01, 0.01]) for _ in range(len(truth))]
+
+    report = generate_report(
+        estimate=est,
+        truth=truth,
+        baselines={},
+        output_dir=tmp_path,
+        run_id="test_nees_run",
+        cov_history=cov_history,
+    )
+    assert (tmp_path / "nees.png").exists()
+    assert report.nees_mean is not None
+    assert report.nees_consistent is not None
+    assert "NEES=" in report.summary_line()

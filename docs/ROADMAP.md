@@ -44,12 +44,12 @@ a timing-alignment check, all passing.
 | Deliverable | Owner | Status |
 |---|---|---|
 | Shared preprocessing (gravity alignment) and calibration module | Sristee | ✅ Done — resample/window still open for M2 |
-| AHRS orientation (imufusion) | Sristee | In progress — 3/4 frame tests pass, turning doesn't close the loop yet |
-| Magnetometer hard-iron fit + magnitude/dip/innovation triple gate | Sristee | In progress — logic implemented, untested (no unit test, no physical magnet demo) |
-| Raw double-integration baseline | Sristee | In progress — blocked on the same turning gap as AHRS above |
+| AHRS orientation (imufusion) | Sristee | ✅ Done — settings were silently never applied (swallowed exception), fixed for real in #58 with a test proving it |
+| Magnetometer hard-iron fit + magnitude/dip/innovation triple gate | Sristee | In progress — gate logic is correct, but default calibration (`expected_dip_rad=0`) makes it reject even a clean field, leaving heading to gyro-only; tracked as #59 |
+| Raw double-integration baseline | Sristee | ✅ Done (code) — the one remaining frame test needs a learned-velocity or ESKF estimate to close a loop starting at nonzero speed, which is M2/M3 scope, not a raw-integration bug (#20 open pending Sristee's confirmation of that read) |
 | PDR baseline | Sristee | Not started |
 | First own recordings: outdoor GPS walks + one surveyed indoor loop | Sumedha | Not started |
-| Web UI shell against mock frames | Tanmay, Akshit | Not started |
+| Web UI shell against mock frames | Tanmay, Akshit | ✅ Done — real socket + real Leaflet map, verified against a live gateway |
 
 **Done when:** end to end on a test loop, and the magnet test visibly trips the gate
 without corrupting heading.
@@ -106,9 +106,9 @@ and a 10 s stop produces zero position creep.
 |---|---|---|
 | Android IMU streamer, capture-time stamping, WS uplink | Harsh | ✅ Done — code verified, real on-device test still pending |
 | Gateway: ingest, broadcast, control | Harsh | ✅ Done — `/live` is a GPS-passthrough placeholder pending the live ESKF |
-| Golden-run replay through the identical pipeline | Harsh | Blocked — needs `dr_core.io.SessionReader` (Sristee, M0) |
-| Offline MBTiles built and verified with Wi-Fi off | Harsh | Build/serve mechanism ✅ done; needs the actual demo venue's bounding box |
-| Map, dot, ellipse, GPS toggle, diverging baseline dot | Tanmay | Not started |
+| Golden-run replay through the identical pipeline | Harsh | Blocked — needs `dr_core.io.SessionReader` (Sristee, M0); deliberately waiting rather than duplicating her schema |
+| Offline MBTiles built and verified with Wi-Fi off | Harsh | ✅ Done for the KIIT practice loop — 582 real tiles, zero non-localhost requests observed while rendering; needs the actual SIH venue's bbox once announced |
+| Map, dot, ellipse, GPS toggle, diverging baseline dot | Tanmay | ✅ Done — real Leaflet, verified against a live gateway (dot's screen position confirmed moving across two screenshots of the same page) |
 | Telemetry strip: NIS, ZUPT/ZARU lamp, mag gate, σ, heading source | Akshit | ✅ Done — verified against a mock frame, screenshots reviewed |
 | Auto post-run report panel | Akshit, Sikruti | Presenter + serving ✅ done; live auto-trigger blocked on the ESKF + a surveyed loop |
 | Scripted 3-minute arc, rehearsed | Tanmay, Sumedha | Not started |

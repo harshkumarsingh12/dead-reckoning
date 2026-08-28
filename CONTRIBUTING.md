@@ -29,7 +29,7 @@ pytest -q          # should be green before you change anything
 > The `-c conda-forge --override-channels` is not optional decoration — Anaconda's
 > default channels require accepting their Terms of Service, and conda-forge does not.
 
-A green first run looks like **`17 passed, 29 xfailed`**. The xfails are the work
+A green first run looks like **`62 passed, 8 xfailed`**. The xfails are the work
 remaining; see [The xfail ledger](#the-xfail-ledger) below.
 
 Everyday commands, identical on every platform:

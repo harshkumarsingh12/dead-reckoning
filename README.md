@@ -128,7 +128,7 @@ cd dead-reckoning
 pip install -e ".[dev]"
 pre-commit install
 
-pytest -q          # 17 passed, 29 xfailed  — the xfails are the work remaining
+pytest -q          # 62 passed, 8 xfailed  — the xfails are the work remaining
 ```
 
 Run the live stack:
@@ -183,15 +183,23 @@ Two structural guarantees, both enforced by tests rather than by good intentions
 
 ## Development status
 
-Scaffolded. The structure, the contract, the tests and the pipeline are in place; the
-algorithms are being built by their owners.
+Past scaffolding. **M3 (ESKF fusion) is fully done.** M4 (the live demo) is nearly
+there — the Android streamer, the gateway, and the entire web UI (live socket, map,
+telemetry strip, post-run report panel) are all implemented and verified against a
+real running stack, not just typechecked. M0/M1 are mostly done; M2 (the learned
+velocity model) hasn't started — it's waiting on RoNIN/OxIOD dataset access.
+
+What's left in M4 needs real-world inputs, not more code: the actual SIH venue's
+bounding box for the offline tiles (a KIIT-campus practice build already exists and is
+verified), a recorded session to enable replay, and the team physically rehearsing the
+3-minute arc.
 
 Every unimplemented acceptance criterion is a real test, marked `xfail(strict=True)`
 with its milestone and owner in the reason string. Implementing the feature makes the
 test pass, which turns CI **red** until the marker is removed — so nothing can be
 silently claimed as done. CI posts the remaining count per owner on every run.
 
-Milestones and exit criteria: [docs/ROADMAP.md](docs/ROADMAP.md).
+Milestones, exit criteria, and per-deliverable status: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 

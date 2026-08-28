@@ -86,27 +86,39 @@ Two encoding choices worth knowing before touching this file (full reasoning in
 Subscribes to `GET /live` (a WebSocket despite the verb — see `services/gateway`).
 Reconnects on drop with a fixed backoff: the phone hotspot **will** hiccup at least
 once during a real demo run, and a UI that needs a manual page refresh at that exact
-moment loses the room. Currently a stub — the hook exists and is wired into `App.tsx`,
-but the actual socket-open/parse/reconnect logic is not yet implemented (`frame`
-permanently `null`, `connected` permanently `false`).
+moment loses the room. Implemented and verified against a real gateway — a malformed
+frame is dropped rather than tearing the socket down.
 
 ### `TrackMap` (owner: Tanmay)
 
-Not yet implemented. Will render, in order of most to least dramatic on stage:
+Implemented, real Leaflet:
 
-1. Leaflet base layer from `GET /tiles/{z}/{x}/{y}.png` — the gateway's local MBTiles
-   route, never an external host.
+1. Base tile layer from `GET /tiles/{z}/{x}/{y}.png` — the gateway's local MBTiles
+   route, never an external host (`ci-web.yml` fails the build if one shows up in the
+   shipped bundle).
 2. The raw-integration **baseline** dot (`frame.baseline_p_world`) — the one that
    visibly spirals away. Watching this diverge in real time next to the tracked dot is,
    per the build plan, "the most persuasive thing on screen."
-3. The estimated dot (`frame.state.p_world`) with a 1-sigma uncertainty ellipse derived
-   from `frame.state.cov`.
+3. The estimated dot (`frame.state.p_world`) with a 1-sigma uncertainty ellipse, drawn
+   from an eigendecomposition of `frame.state.cov`'s position sub-block
+   (`map/enu.ts`).
 4. The known true path (`frame.truth_p_world`), when available.
+
+Every marker is a Leaflet `circleMarker` (plain SVG), not `L.marker` with the default
+icon — sidesteps the classic broken-icon-path problem bundlers have with Leaflet's
+shipped image assets. The map is created once and never recentres itself after the
+first frame, so it never fights an operator's manual pan/zoom mid-demo.
+
+Converting `p_world` (local ENU metres) back to real lat/lng for the basemap needed a
+small, additive, backward-compatible extension to the frozen contract:
+`TelemetryFrame.origin_lat_deg`/`origin_lon_deg` (default `null` — nothing existing
+broke). Verified against a real, freshly started gateway: pushed real GPS fixes over
+`/ingest`, watched the dot's on-screen position genuinely change between two
+screenshots of the same live page.
 
 ### `TelemetryStrip` (owner: Akshit)
 
-Not yet implemented beyond a connection-status line and the raw drift percentage. Will
-carry, always visible under the map:
+Implemented. Always visible under the map:
 
 - Per-channel NIS against its chi-square bounds (`frame.nis`, `frame.nis_bounds`)
 - ZUPT / ZARU firing lamp (`frame.zupt_active`, `frame.zaru_active`)
@@ -117,6 +129,19 @@ carry, always visible under the map:
 
 This is the answer to "how do you know your uncertainty is honest?" before a judge
 finishes asking it — see `docs/DEMO_RUNBOOK.md`'s Q&A section.
+
+### `PostRunPanel` (owner: Akshit, presentation + Sikruti, the numbers)
+
+The auto-generated post-run report — stats (distance, duration, ATE, RTE, loop-closure
+error, drift %, coverage@1σ, inference time), per-baseline drift badges, a NIS-
+consistency summary, and the four plots `generate_report` writes, fetched from the
+gateway's `GET /reports/{run_id}/{file}`. Implemented as a pure presenter: it renders
+whatever `RunReport` it is handed and does not decide when a run has ended or how the
+report was generated. Not currently mounted in `App.tsx` — there is no live signal for
+"a run just ended" yet, since that needs the ESKF wired into the live path plus a
+surveyed ground-truth loop (see `services/gateway/reports.py`). Feed it a report by
+hand today: run `scripts/run_eval.py` on a recording, point the gateway at the
+resulting directory with `--reports`, and pass the parsed `report.json` in as a prop.
 
 ### `ui/tokens.ts` (owner: Akshit)
 
@@ -131,19 +156,23 @@ One source of truth for colour, spacing, radius. Two constraints that are not ta
 
 | Piece | Status |
 |---|---|
-| `types.ts` (frozen contract mirror) | ✅ complete, matches `dr_core.types` |
+| `types.ts` (frozen contract mirror) | ✅ complete, matches `dr_core.types` — now including `origin_lat_deg`/`origin_lon_deg` |
 | App shell, component wiring | ✅ implemented |
 | Vite config, dev proxy, offline-tile-host CI guard | ✅ implemented |
-| `useTelemetry` — real WebSocket logic | ❌ stub (owner: Tanmay) |
-| `TrackMap` — Leaflet, dot, ellipse, baseline | ❌ stub (owner: Tanmay) |
-| `TelemetryStrip` — NIS/ZUPT/mag-gate/drift UI | ❌ stub (owner: Akshit) |
+| `useTelemetry` — real WebSocket logic | ✅ implemented, verified against a live gateway |
+| `TrackMap` — Leaflet, dot, ellipse, baseline | ✅ implemented, verified against a live gateway |
+| `TelemetryStrip` — NIS/ZUPT/mag-gate/drift UI | ✅ implemented, verified against a mock frame |
+| `PostRunPanel` — the auto-generated report | ✅ implemented, verified against a real gateway + real report files |
 | `npm run lint` / `typecheck` / `build` | ✅ green, both locally and in `ci-web.yml` |
 
-The gateway side this UI will eventually connect to (`WS /live`, `GET /tiles`,
-`POST /control/gps`) is already implemented — see `services/gateway/app.py` and
-`services/gateway/hub.py`. Its `/live` broadcast is currently a flat-earth GPS
-passthrough placeholder (no ESKF yet), which is enough real, moving data for this UI to
-be built and tested against today without waiting on M3.
+The web app is feature-complete for M4. The gateway side it connects to (`WS /live`,
+`GET /tiles`, `GET /reports`, `POST /control/gps`) is fully implemented too — see
+`services/gateway/app.py` and `services/gateway/hub.py`. What's left is real-world, not
+code: `/live`'s broadcast is still a flat-earth GPS passthrough placeholder (no ESKF
+wired into the live path yet), and there is no live trigger for the report panel
+(needs that same ESKF plus a surveyed ground-truth loop) — both documented in
+`services/gateway/hub.py` and `services/gateway/reports.py`. Neither blocks this UI
+from being built and tested today; both are M3-and-beyond follow-ups.
 
 ## Related
 

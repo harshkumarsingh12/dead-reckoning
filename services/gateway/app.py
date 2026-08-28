@@ -12,13 +12,13 @@ Routes:
     POST /control/replay              start the golden-run replay (#37, not yet)
 
 `/ingest`, `/live`, `/control/gps`, tile serving, and report serving are real. `/live`'s
-position is a placeholder GPS passthrough until the ESKF (M3) lands -- see
-`services/gateway/hub.py` for exactly why and what replaces it. `/reports` serves
-files a human already generated offline with `scripts/run_eval.py`; there is no route
-here that triggers report generation from a live session yet -- see
-`services/gateway/reports.py` for why that is not honestly buildable until the ESKF is
-wired into the live path and a ground-truth loop exists. `/control/replay` still 501s:
-it needs a recorded golden run that does not exist yet (#37).
+position now comes from a real `dr_core.fusion.Eskf` (see `services/gateway/hub.py`
+for exactly what is and is not wired into it yet -- the learned-velocity and
+magnetometer updates are still open). `/reports` serves files a human already
+generated offline with `scripts/run_eval.py`; there is no route here that triggers
+report generation from a live session yet -- see `services/gateway/reports.py` for why
+that is not honestly buildable until a ground-truth loop exists. `/control/replay`
+still 501s: it needs a recorded golden run that does not exist yet (#37).
 """
 
 from __future__ import annotations
@@ -108,11 +108,11 @@ def _register_ingest(app: FastAPI, hub: Hub) -> None:
                 raw = await websocket.receive_json()
                 match raw.get("type"):
                     case "imu":
-                        decode_imu(raw)  # validated now; fused once M1-M3 land
+                        await hub.on_imu(decode_imu(raw))
                     case "gps":
                         await hub.on_gps(decode_gps(raw))
                     case "meta" | "event":
-                        pass  # TODO(M1/M3): session context, ZUPT/ZARU markers
+                        pass  # TODO(M1): session context, calibration markers
         except WebSocketDisconnect:
             pass
 

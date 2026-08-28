@@ -18,13 +18,29 @@ everything still works. That is a property of the build, not a hope.
 
 ## T-minus one week
 
-- [ ] Build the offline tiles: `python scripts/make_tiles.py --bbox ... --out tiles/kiit.mbtiles`
-- [ ] **Verify them with the laptop's Wi-Fi physically off.** Tiles that were silently
-      served from a browser cache during development will be blank on the day.
+- [x] Build the offline tiles for the KIIT campus practice loop:
+      ```
+      python scripts/make_tiles.py --bbox 85.810,20.348,85.824,20.360 --zoom 14-19 \
+          --out tiles/kiit_campus.mbtiles
+      ```
+      582 tiles, zoom 14-19, 2.3 MB, 0 failed fetches.
+      **SHA-256:** `51020e306578ecfffbec784c445a384fdee70654e68f1f50dfb09489a11fee8a`
+      Not committed (gitignored by design, see `.gitattributes`) — share this exact
+      file over the team drive rather than rebuilding it per machine, since OSM's
+      tile content can drift between fetches and the checksum above is a fingerprint
+      of *this* build, not of the bbox/zoom in general.
+- [x] **Verified with a real gateway serving these tiles and zero non-localhost
+      network requests observed in the browser** (checked via Playwright's request
+      log, not just visual inspection) — real road names and buildings rendered
+      (KIIT Road, KIIT Campus 3/6, NIFT hostels), dot correctly placed on KIIT Road.
+      Re-verify with the laptop's Wi-Fi *physically* off before the actual event —
+      this check proves no code path reaches the internet, not that Wi-Fi hardware
+      being on couldn't matter for some other reason.
+- [ ] **This is the KIIT campus practice loop, not necessarily the SIH grand-finale
+      venue.** Rebuild with the real venue's bounding box once announced, using the
+      same command above with the venue's coordinates.
 - [ ] Record the golden run on the actual demo loop, with the full calibration ritual
       and a clean GPS-off toggle. Commit it under `data/golden/`.
-- [ ] Note the tiles file's SHA-256 here, so a corrupt copy is detectable:
-      `TODO: <checksum>`
 - [ ] Survey the demo loop: measure the corners, mark the start on the floor. Those
       measurements are the ground truth behind the number you will quote.
 

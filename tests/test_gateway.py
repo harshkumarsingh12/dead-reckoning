@@ -2,10 +2,13 @@
 
 Spec: docs/BUILD_PLAN.md sections 6.1 and 6.8  |  OWNER: Harsh  |  MILESTONE: M4
 
-/live's position is a placeholder GPS passthrough until the ESKF (M3) lands -- see
-`services/gateway/hub.py`. These tests exercise the wiring (timestamps preserved,
-frames broadcast, the toggle observed), not fusion correctness -- that gets its own
-tests once M3 exists.
+/live's position is fused through a real `dr_core.fusion.Eskf` -- see
+`services/gateway/hub.py` for exactly what is and is not wired into it. Most of these
+tests exercise the wiring (timestamps preserved, frames broadcast, the toggle observed)
+rather than fusion correctness, which is `tests/test_fusion.py`'s job; the two
+IMU-driven tests below exist specifically to prove the real Eskf is in the loop and not
+the old flat-earth placeholder, which could never move `psi_rad` off `0.0` or `cov` off
+`eye(7)`.
 """
 
 from __future__ import annotations
@@ -102,6 +105,56 @@ def test_gps_toggle_is_reflected_in_the_telemetry_stream() -> None:
             ingest_ws.send_json(_SAMPLE_GPS_FIX)
             frame = live_ws.receive_json()
     assert frame["gps_enabled"] is False
+
+
+def _imu_tick(t_ns: int, *, w_z: float = 0.0) -> dict[str, object]:
+    """One stationary-looking accelerometer tick, sustained yaw rate optional."""
+    return {"type": "imu", "t_ns": t_ns, "a": [0.0, 0.0, 9.81], "w": [0.0, 0.0, w_z], "m": None}
+
+
+def test_imu_ticks_drive_the_real_eskf_not_a_frozen_placeholder() -> None:
+    """The old placeholder hardcoded `psi_rad=0.0` and `cov=eye(7)` forever -- it had
+    no way to move either. A sustained gyro yaw rate through the real Eskf's `predict`
+    must move `psi_rad` off zero, proving the filter is actually integrating."""
+    base_t_ns = 1_000_000_000_000
+    dt_ns = 5_000_000  # 5 ms, 200 Hz
+    with (
+        TestClient(create_app()) as client,
+        client.websocket_connect("/live") as live_ws,
+        client.websocket_connect("/ingest") as ingest_ws,
+    ):
+        frame = None
+        for i in range(50):
+            ingest_ws.send_json(_imu_tick(base_t_ns + i * dt_ns, w_z=0.5))
+            frame = live_ws.receive_json()
+    assert frame is not None
+    # First tick only sets the filter's clock (Eskf.predict's first-call special
+    # case) -- the other 49 integrate roughly 0.5 rad/s * 0.245 s =~ 0.12 rad.
+    assert frame["state"]["psi_rad"] != 0.0
+    assert abs(frame["state"]["psi_rad"]) > 0.05
+    assert frame["state"]["cov"] != [[1.0 if i == j else 0.0 for j in range(7)] for i in range(7)]
+
+
+def test_stationary_imu_ticks_fire_zupt_and_zaru() -> None:
+    """Standing still long enough must light the ZUPT/ZARU lamps -- the most legible
+    moment in the demo (docs/DEMO_RUNBOOK.md's ten-second stop)."""
+    base_t_ns = 2_000_000_000_000
+    dt_ns = 5_000_000  # 5 ms, 200 Hz -- matches StationaryDetector's default rate_hz
+    # StationaryDetector needs its 100-sample window (0.5 s) full, then 0.3 s more of
+    # held-low variance before it fires -- 161 ticks (indices 0..160) is the first
+    # tick where that has happened; see the analysis in this PR's description.
+    with (
+        TestClient(create_app()) as client,
+        client.websocket_connect("/live") as live_ws,
+        client.websocket_connect("/ingest") as ingest_ws,
+    ):
+        frame = None
+        for i in range(161):
+            ingest_ws.send_json(_imu_tick(base_t_ns + i * dt_ns))
+            frame = live_ws.receive_json()
+    assert frame is not None
+    assert frame["zupt_active"] is True
+    assert frame["zaru_active"] is True
 
 
 def test_replay_501s_until_a_golden_run_exists() -> None:

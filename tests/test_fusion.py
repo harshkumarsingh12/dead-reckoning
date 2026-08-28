@@ -116,3 +116,157 @@ def test_velocity_scale_freezes_when_gps_drops() -> None:
             )
         )
     assert eskf.state.scale == pytest.approx(before)
+
+
+# -------------- edge cases (hardening, not acceptance criteria) ----------------
+
+
+def test_covariance_remains_positive_definite_over_long_run() -> None:
+    """Joseph-form update must keep P symmetric positive-definite forever.
+
+    A naive (I - KH)P form loses symmetry through floating-point accumulation.
+    The Joseph form was chosen specifically to avoid this, so we prove it holds
+    over a realistically long cycle count.
+    """
+    from dr_core.types import VelocityEstimate
+
+    eskf = Eskf()
+    for i in range(1, 1001):
+        eskf.predict(i * 5_000_000, 0.1)
+        if i % 5 == 0:
+            eskf.update_velocity(
+                VelocityEstimate(
+                    t_ns=i * 5_000_000,
+                    v_dev=np.array([1.0, 0.0]),
+                    cov=np.diag([0.05, 0.05]),
+                )
+            )
+    cov = eskf.state.cov
+    # Symmetric
+    assert np.allclose(cov, cov.T, atol=1e-12), "covariance lost symmetry"
+    # Positive definite (all eigenvalues > 0)
+    eigenvalues = np.linalg.eigvalsh(cov)
+    assert np.all(eigenvalues > 0), f"non-positive eigenvalue: {eigenvalues.min():.2e}"
+
+
+def test_magnetometer_gate_rejects_large_heading_innovation() -> None:
+    """A heading innovation far outside the chi-square gate must be rejected.
+
+    Indoor environments produce rotated fields at near-normal strength. The gate
+    must catch these; if it does not, the filter trusts a corrupted reading and
+    the path bends.
+    """
+    eskf = Eskf()
+    eskf.predict(5_000_000, 0.0)  # initialise time
+
+    # Current heading is near 0.0. Feed a heading 3 rad away — clearly wrong.
+    accepted = eskf.update_magnetometer(10_000_000, 3.0, sigma_rad=0.1)
+    assert accepted is False, "gate accepted a 3-rad heading innovation"
+
+
+def test_gps_cog_heading_only_updates_above_speed_threshold() -> None:
+    """Below 1 m/s, GPS course-over-ground is noise. The filter must ignore it.
+
+    BUILD_PLAN section 7.6: course heading correction only at 'sufficient speed'.
+    The code uses speed > 1.0 m/s as the threshold.
+    """
+    from dr_core.types import GpsFix
+
+    eskf = Eskf()
+    eskf.predict(5_000_000, 0.0)
+    heading_before = eskf.state.psi_rad
+
+    # GPS fix at very low speed — should NOT update heading via COG
+    slow_fix = GpsFix(
+        t_ns=10_000_000,
+        lat_deg=20.3535,
+        lon_deg=85.8164,
+        accuracy_m=3.0,
+        speed_mps=0.5,  # below threshold
+        course_rad=1.5,  # very different from heading_before
+    )
+    eskf.update_gps(slow_fix)
+    heading_after = eskf.state.psi_rad
+
+    # Position may have changed, but heading should NOT have been corrected by COG.
+    # (It may shift slightly from the position update's effect on the error state,
+    # but not by the 1.5 rad the COG heading would impose.)
+    assert abs(heading_after - heading_before) < 0.3, (
+        f"heading jumped {abs(heading_after - heading_before):.2f} rad from a low-speed COG"
+    )
+
+
+def test_double_zupt_from_same_window_is_safe() -> None:
+    """Calling ZUPT twice while stationary must not corrupt the state.
+
+    This can happen if the detector fires on consecutive IMU samples within the
+    same stationary window, and the caller applies ZUPT for each one.
+    """
+    eskf = Eskf()
+    eskf.predict(5_000_000, 0.0)
+    eskf.predict(10_000_000, 0.0)
+
+    eskf.update_zupt(10_000_000)
+    eskf.update_zupt(10_000_000)
+    st = eskf.state
+
+    # Velocity should still be near zero (not NaN or diverged)
+    assert np.all(np.isfinite(st.v_world))
+    assert np.all(np.isfinite(st.p_world))
+    assert np.all(np.isfinite(st.cov))
+    # Covariance should still be positive definite
+    eigenvalues = np.linalg.eigvalsh(st.cov)
+    assert np.all(eigenvalues > 0), (
+        f"non-positive eigenvalue after double ZUPT: {eigenvalues.min():.2e}"
+    )
+
+
+def test_large_imu_dt_does_not_cause_numerical_overflow() -> None:
+    """A 2-second gap in IMU (e.g. Android app backgrounded) must not blow P to infinity.
+
+    The predict step scales process noise by dt, so a large dt produces a large Q addition.
+    P should grow but remain finite and positive-definite.
+    """
+    eskf = Eskf()
+    eskf.predict(1_000_000_000, 0.0)  # t = 1 s
+    eskf.predict(3_000_000_000, 0.0)  # t = 3 s — a 2-second gap
+
+    cov = eskf.state.cov
+    assert np.all(np.isfinite(cov)), "covariance contains inf/nan after a 2 s gap"
+    eigenvalues = np.linalg.eigvalsh(cov)
+    assert np.all(eigenvalues > 0), (
+        f"non-positive eigenvalue after large dt: {eigenvalues.min():.2e}"
+    )
+    # Covariance should have grown but not to absurd values
+    assert np.max(cov) < 1e6, f"covariance exploded to {np.max(cov):.2e}"
+
+
+def test_heading_wraps_correctly_across_pi_boundary() -> None:
+    """Driving heading past +pi must wrap to -pi, not accumulate unbounded.
+
+    The wrap_angle function is the defence, and it sits on the hot path of every
+    predict and inject_and_reset call.
+    """
+    from dr_core.fusion.eskf import wrap_angle
+
+    # Exact boundary cases
+    assert wrap_angle(np.pi) == pytest.approx(-np.pi, abs=1e-10)
+    assert wrap_angle(-np.pi) == pytest.approx(-np.pi, abs=1e-10)
+    assert wrap_angle(0.0) == pytest.approx(0.0, abs=1e-10)
+
+    # Just past +pi wraps to just past -pi
+    assert wrap_angle(np.pi + 0.1) == pytest.approx(-np.pi + 0.1, abs=1e-10)
+    # Just past -pi wraps correctly
+    assert wrap_angle(-np.pi - 0.1) == pytest.approx(np.pi - 0.1, abs=1e-10)
+
+    # Large accumulated angle wraps properly
+    assert -np.pi <= wrap_angle(10.0) < np.pi
+    assert -np.pi <= wrap_angle(-10.0) < np.pi
+
+    # Now verify the filter itself: accumulate heading past ±pi
+    eskf = Eskf()
+    # 100 predict steps with a large positive gyro rate to push heading past pi
+    for i in range(1, 101):
+        eskf.predict(i * 10_000_000, 5.0)  # 5 rad/s * 0.01 s = 0.05 rad per step
+    psi = eskf.state.psi_rad
+    assert -np.pi <= psi < np.pi, f"heading {psi:.4f} outside [-pi, pi)"

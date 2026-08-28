@@ -116,3 +116,37 @@ def test_velocity_scale_freezes_when_gps_drops() -> None:
             )
         )
     assert eskf.state.scale == pytest.approx(before)
+
+
+def test_velocity_covariance_inflation_and_variance_floor() -> None:
+    """Overconfident model covariances can trip gating or over-trust flawed estimates.
+
+    Configuring velocity_cov_scale and min_velocity_variance must inflate R appropriately.
+    """
+    from dr_core.fusion.eskf import EskfConfig
+    from dr_core.types import VelocityEstimate
+
+    # 1. Test inflation scale prevents false rejection of noisy updates
+    config_inflated = EskfConfig(velocity_cov_scale=4.0, min_velocity_variance=0.04)
+    eskf_inflated = Eskf(config_inflated)
+    eskf_default = Eskf()
+
+    # Small nominal covariance from overconfident model
+    tiny_cov = np.diag([1e-6, 1e-6])
+    est = VelocityEstimate(
+        t_ns=100_000_000,
+        v_dev=np.array([1.5, 0.2]),
+        cov=tiny_cov,
+    )
+
+    eskf_inflated.predict(100_000_000, 0.0)
+    eskf_default.predict(100_000_000, 0.0)
+
+    # Both filters accept the update, but the inflated filter maintains safer uncertainty bounds
+    assert eskf_inflated.update_velocity(est) is True
+    assert eskf_default.update_velocity(est) is True
+
+    # Check that inflated/floored filter does not collapse its velocity covariance to near-zero
+    p_inflated = eskf_inflated.state.cov[2:4, 2:4]
+    p_default = eskf_default.state.cov[2:4, 2:4]
+    assert np.all(np.diag(p_inflated) > np.diag(p_default))

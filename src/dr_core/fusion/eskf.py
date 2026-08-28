@@ -56,6 +56,8 @@ class EskfConfig:
     sigma_zaru: float = 0.005  # rad/s
     gate_level: float = 0.95  # chi-square level, every channel
     freeze_scale_without_gps: bool = True
+    velocity_cov_scale: float = 1.0  # covariance inflation multiplier (s_cov >= 1.0)
+    min_velocity_variance: float = 0.0  # (m/s)^2 minimum variance floor on diagonal of R
 
 
 class Eskf:
@@ -206,7 +208,10 @@ class Eskf:
             mat_h[0, 6] = 0.0
             mat_h[1, 6] = 0.0
 
-        mat_r = estimate.cov
+        mat_r = estimate.cov.copy() * self.config.velocity_cov_scale
+        if self.config.min_velocity_variance > 0.0:
+            mat_r[0, 0] = max(float(mat_r[0, 0]), self.config.min_velocity_variance)
+            mat_r[1, 1] = max(float(mat_r[1, 1]), self.config.min_velocity_variance)
         mat_s = mat_h @ self._P @ mat_h.T + mat_r
 
         accepted, nis = self._vel_gate.accept(y, mat_s)

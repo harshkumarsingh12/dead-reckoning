@@ -37,6 +37,12 @@ runs/
 lightning_logs/
 wandb/
 
+# ---- Eval reports: regenerate with scripts/run_eval.py or scripts/evaluate_model.py.
+# Only the specific snapshots cited as evidence in docs/EVALUATION.md are committed.
+reports/**
+!reports/m2_eval_epoch113.json
+!reports/m2_eval_campus_all.json
+
 # ---- Notebooks
 notebooks/**
 !notebooks/README.md

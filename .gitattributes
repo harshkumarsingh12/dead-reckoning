@@ -21,6 +21,7 @@ gradlew       text eol=lf
 # mid-hackathon is a self-inflicted outage. Only the released model and one
 # small golden run are tracked; raw datasets and tiles are regenerated, not stored.
 *.onnx        filter=lfs diff=lfs merge=lfs -text
+*.onnx.data   filter=lfs diff=lfs merge=lfs -text
 *.jar         binary
 *.png         binary
 *.jpg         binary

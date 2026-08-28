@@ -2,15 +2,25 @@
 
 Spec: docs/BUILD_PLAN.md section 6.4  |  OWNER: Sumedha  |  MILESTONE: M2
 
-Marked ``ml`` so the heavy torch install is confined to its own workflow. The stubs
-raise before importing torch, so these still take part in the default run and stay
-visible on the burndown.
+Marked ``ml`` so the heavy torch install is confined to its own workflow. The `ml`
+marker's own description says "skipped in the default CI job" -- that skip is enforced
+here via ``importorskip`` rather than relying on marker deselection, since
+ci-python.yml's default job runs plain ``pytest -q`` with no ``-m`` filter at all.
+Before these tests were implemented that was moot (every stub raised
+``NotImplementedError`` before ever reaching an ``import torch``, which is exactly what
+the ``xfail(strict=True)`` markers expected); now that the real bodies genuinely import
+torch, running them without it would be an uncontrolled ``ModuleNotFoundError`` instead
+of a clean skip.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
+
+pytest.importorskip("torch")
 
 from dr_core.models.runtime import INFERENCE_BUDGET_MS
 from dr_core.models.tcn import IN_CHANNELS, OUT_DIM, augment_random_yaw, build_model
@@ -28,7 +38,6 @@ def test_output_dimension_carries_a_full_covariance() -> None:
     assert OUT_DIM == 5
 
 
-@pytest.mark.xfail(reason="M2 -- build_model unimplemented (owner: Sumedha)", strict=True)
 def test_model_is_strictly_causal() -> None:
     """Perturbing a FUTURE sample must not change the current output.
 
@@ -47,7 +56,6 @@ def test_model_is_strictly_causal() -> None:
     assert not torch.allclose(model(x_future)[:, :, -1], y_before)
 
 
-@pytest.mark.xfail(reason="M2 -- NLL loss unimplemented (owner: Sumedha)", strict=True)
 def test_nll_loss_penalises_overconfidence() -> None:
     """A tight sigma on a large error must cost more than an honest wide one.
 
@@ -64,7 +72,6 @@ def test_nll_loss_penalises_overconfidence() -> None:
     assert gaussian_nll_loss(overconfident, target) > gaussian_nll_loss(honest, target)
 
 
-@pytest.mark.xfail(reason="M2 -- augmentation unimplemented (owner: Sumedha)", strict=True)
 def test_random_yaw_augmentation_preserves_speed() -> None:
     """Rotating a window rotates its label by the same angle. Speed is invariant."""
     rng = np.random.default_rng(0)
@@ -89,15 +96,51 @@ def test_inference_fits_the_stated_budget() -> None:
     assert runtime.benchmark() < INFERENCE_BUDGET_MS
 
 
-@pytest.mark.xfail(reason="M2 -- ONNX export unimplemented (owner: Sumedha)", strict=True)
-def test_onnx_output_matches_torch() -> None:
+def test_onnx_output_matches_torch(tmp_path: Path) -> None:
     """Export parity. A quantized model that quietly disagrees with the one you
     validated is a very expensive way to lose a demo."""
+    import onnxruntime as ort
     import torch
 
     from dr_core.models.tcn import export_onnx
 
     model = build_model()
-    export_onnx(model, "build/parity.onnx", window_samples=200, quantize_int8=False)
+    model.eval()
+    onnx_path = tmp_path / "parity.onnx"
+    export_onnx(model, str(onnx_path), window_samples=200, quantize_int8=False)
+
     x = torch.randn(1, IN_CHANNELS, 200)
-    raise AssertionError(f"compare ONNX session output against {model(x).shape}")
+    with torch.no_grad():
+        torch_out = model(x).numpy()
+
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    (onnx_out,) = session.run(None, {session.get_inputs()[0].name: x.numpy()})
+
+    np.testing.assert_allclose(torch_out, onnx_out, rtol=1e-3, atol=1e-5)
+
+
+def test_velocity_model_runtime_predict_returns_a_valid_estimate(tmp_path: Path) -> None:
+    """The actual wrapper the live pipeline calls, not just the raw ONNX session:
+    warm-up, predict() decoding the Cholesky output into a real covariance, and
+    benchmark() -- all exercised end to end against a real (untrained) export."""
+    from dr_core.models.runtime import VelocityModelRuntime
+    from dr_core.models.tcn import export_onnx
+
+    model = build_model()
+    model.eval()
+    onnx_path = tmp_path / "runtime.onnx"
+    export_onnx(model, str(onnx_path), window_samples=200, quantize_int8=True)
+
+    runtime = VelocityModelRuntime(onnx_path, warmup_iterations=2)
+    window = np.random.default_rng(26168).normal(size=(IN_CHANNELS, 200))
+    estimate = runtime.predict(window, t_ns=123_456_789)
+
+    assert estimate.t_ns == 123_456_789
+    assert estimate.v_dev.shape == (2,)
+    assert estimate.cov.shape == (2, 2)
+    np.testing.assert_allclose(estimate.cov, estimate.cov.T)  # symmetric
+    assert np.all(np.linalg.eigvalsh(estimate.cov) > 0.0)  # positive definite
+    assert runtime.last_inference_ms > 0.0
+
+    median_ms = runtime.benchmark(iterations=10)
+    assert median_ms > 0.0

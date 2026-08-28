@@ -18,16 +18,28 @@ from dr_core.preprocess.calibrate import (
     fit_hard_iron,
 )
 from dr_core.preprocess.pipeline import (
+    DEFAULT_HOP_S,
+    DEFAULT_RATE_HZ,
+    DEFAULT_WINDOW_S,
     align_gravity,
+    heading_rad,
     prepare_window,
     resample_uniform,
+    rotate_dev_to_world,
+    rotate_world_to_dev,
 )
 
 __all__ = [
+    "DEFAULT_HOP_S",
+    "DEFAULT_RATE_HZ",
+    "DEFAULT_WINDOW_S",
     "CalibrationResult",
     "align_gravity",
     "estimate_gyro_bias",
     "fit_hard_iron",
+    "heading_rad",
     "prepare_window",
     "resample_uniform",
+    "rotate_dev_to_world",
+    "rotate_world_to_dev",
 ]

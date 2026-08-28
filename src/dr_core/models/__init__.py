@@ -13,6 +13,7 @@ Two runtimes, deliberately separated:
     machine never needs a 2 GB torch download.
 """
 
+from dr_core.models.integrator import ModelOnlyIntegrator
 from dr_core.models.runtime import VelocityModelRuntime
 
-__all__ = ["VelocityModelRuntime"]
+__all__ = ["ModelOnlyIntegrator", "VelocityModelRuntime"]

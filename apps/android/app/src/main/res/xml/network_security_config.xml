@@ -1,17 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The gateway runs on a laptop reached over the phone's own hotspot, on plain HTTP
-  and ws://. Android blocks cleartext by default, so the private ranges are opted in
-  explicitly rather than by switching cleartext on everywhere.
+  The gateway runs on a laptop reached over the phone's own hotspot (or, for USB-tethered
+  bench testing, over `adb reverse` via 127.0.0.1), on plain HTTP and ws://. Android
+  blocks cleartext by default, so it is opted in explicitly here rather than left off.
 
-  Deliberately scoped to RFC1918 addresses: the app can never be talked into sending
-  IMU traffic to an arbitrary cleartext host on the internet.
+  NOT scoped to RFC1918 domain entries; an earlier version of this file tried that
+  (a literal "domain" entry per octet, e.g. 192.168.0.0) on the mistaken assumption
+  that Android's network-security-config domain matching supports CIDR ranges. It does
+  not: a domain entry is an exact hostname/IP-literal match (or exact-suffix with
+  includeSubdomains), so 192.168.0.0 only ever matched that one literal address, never
+  the laptop's actual DHCP-leased IP on the hotspot subnet. That silently blocked
+  cleartext on every real network, not just this bench test; there is no evidence it
+  was ever exercised end to end before now.
+
+  The actual trust boundary is that the server URL is never hardcoded or auto-discovered;
+  it is whatever the operator types into the app. Cleartext is permitted globally so
+  that boundary is the one actually enforced, rather than a private-range filter that
+  cannot be expressed in this format and was silently doing nothing.
 -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.0.0</domain>
-        <domain includeSubdomains="true">172.16.0.0</domain>
-        <domain includeSubdomains="true">10.0.0.0</domain>
-        <domain includeSubdomains="true">localhost</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

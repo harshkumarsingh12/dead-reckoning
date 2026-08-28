@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 
-from dr_core.types import GpsFix, ImuSample, SessionMeta, Trajectory
+from dr_core.types import CarryPosition, GpsFix, ImuSample, SessionMeta, Trajectory
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
     Array = npt.NDArray[np.float64]
+
+_GRAVITY_MPS2 = 9.80665
 
 # WGS84 approximation for a local ENU projection, meters per degree at the origin
 # latitude. Mirrors dr_core.fusion.eskf.Eskf.update_gps's conversion exactly -- GPS is
@@ -109,14 +112,100 @@ def load_ronin(root: Path, subjects: list[str] | None = None) -> list[Recording]
     )
 
 
+# OxIOD's own folder name -> dr_core.types.CarryPosition. "trolley" has no matching
+# enum value (stays UNKNOWN); "running" and "slow walking" are handheld-pace variants,
+# not distinct carry positions, per the dataset's own layout.
+_OXIOD_CARRY_POSITIONS: dict[str, CarryPosition] = {
+    "handheld": CarryPosition.HAND,
+    "pocket": CarryPosition.POCKET,
+    "handbag": CarryPosition.BAG,
+    "trolley": CarryPosition.UNKNOWN,
+    "running": CarryPosition.HAND,
+    "slow walking": CarryPosition.HAND,
+}
+_OXIOD_RATE_HZ = 100.0  # the "syn" (synchronised) CSVs are pre-resampled to 100 Hz
+
+
+def _load_oxiod_trial(imu_path: Path, vi_path: Path, carry_position: CarryPosition) -> Recording:
+    """One IMU+Vicon trial from OxIOD's ``syn/`` folder.
+
+    Column layout verified against a real downloaded file, not the dataset's sparse
+    documentation:
+
+      * ``imuN.csv``, 16 columns, no header, no usable per-row timestamp (column 0 is a
+        constant placeholder -- rows are the 100 Hz grid): attitude roll/pitch/yaw
+        (unused -- our own AHRS computes orientation, the same as for every other
+        source, so training sees the same kind of estimate live inference will),
+        rotation_rate xyz (rad/s), gravity xyz (G), user_acc xyz (G), magnetic_field xyz
+        (uT). ``a_body`` is reconstructed as ``(gravity + user_acc) * 9.80665`` -- OxIOD
+        was captured via iOS CoreMotion, which reports gravity and linear acceleration
+        already gravity-separated in the device's own frame; summing them back gives
+        the raw specific force dr_core.types.ImuSample.a_body expects.
+      * ``viN.csv``, 9 columns, no header, same placeholder time column, row-aligned
+        1:1 with the matching ``imuN.csv`` (verified: identical row counts): frame
+        index (unused), position xyz (metres, Vicon's own room frame), quaternion
+        (unused for the same reason as attitude, above). Only the planar (x, y)
+        position is kept, matching ``Trajectory.p_world``'s 2D convention -- Vicon's
+        frame is orientation-arbitrary (not compass-aligned) but internally consistent,
+        which is all a heading-agnostic model needs.
+    """
+    imu_df = pd.read_csv(imu_path, header=None)
+    vi_df = pd.read_csv(vi_path, header=None)
+    n = min(len(imu_df), len(vi_df))
+    imu_df = imu_df.iloc[:n]
+    vi_df = vi_df.iloc[:n]
+
+    dt_ns = round(1.0e9 / _OXIOD_RATE_HZ)
+    t_ns = np.arange(n, dtype=np.int64) * dt_ns
+
+    rotation_rate = imu_df.iloc[:, 4:7].to_numpy(dtype=np.float64)
+    gravity_g = imu_df.iloc[:, 7:10].to_numpy(dtype=np.float64)
+    user_acc_g = imu_df.iloc[:, 10:13].to_numpy(dtype=np.float64)
+    magnetic_ut = imu_df.iloc[:, 13:16].to_numpy(dtype=np.float64)
+
+    a_body_all = (gravity_g + user_acc_g) * _GRAVITY_MPS2
+    m_body_all = magnetic_ut * 1.0e-6
+
+    imu = [
+        ImuSample(
+            t_ns=int(t_ns[i]),
+            a_body=a_body_all[i],
+            w_body=rotation_rate[i],
+            m_body=m_body_all[i],
+        )
+        for i in range(n)
+    ]
+
+    p_world = vi_df.iloc[:, 2:4].to_numpy(dtype=np.float64)
+    truth = Trajectory(t_ns=t_ns, p_world=p_world, label="oxiod_vicon")
+
+    session_id = f"oxiod_{imu_path.parents[2].name}_{imu_path.parents[1].name}_{imu_path.stem}"
+    meta = SessionMeta(
+        session_id=session_id,
+        device_model="oxiod-iphone",
+        carry_position=carry_position,
+        imu_rate_hz=_OXIOD_RATE_HZ,
+        notes=f"OxIOD trial: {imu_path}",
+    )
+    return Recording(meta=meta, imu=imu, truth=truth)
+
+
 def load_oxiod(root: Path, carry_positions: list[str] | None = None) -> list[Recording]:
     """Load OxIOD. Vicon ground truth across hand, pocket, bag and trolley.
 
     The carry-position variety is the reason to bother with it: it is what the
     carry-position robustness claim in the demo actually rests on.
 
-    NOT YET IMPLEMENTED beyond the access check -- see load_ronin's docstring; the same
-    reasoning applies to OxIOD's per-trial CSV layout.
+    Args:
+        root: the OxIOD root -- either the directory containing "Oxford Inertial
+            Odometry Dataset/", or that folder itself.
+        carry_positions: folder names to load (``_OXIOD_CARRY_POSITIONS``' keys). None
+            loads all of them except the dataset's own "test" split, which is left
+            alone as a held-out set rather than folded into training.
+
+    Raises:
+        FileNotFoundError: with the access-request URL in the message, because the
+            first person to hit this will not have the data yet.
     """
     root = Path(root)
     if not root.exists():
@@ -124,10 +213,31 @@ def load_oxiod(root: Path, carry_positions: list[str] | None = None) -> list[Rec
             f"OxIOD root not found: {root}. Request access first: {_ACCESS_URLS['oxiod']} "
             "(see data/README.md and scripts/fetch_datasets.py --dataset oxiod --info)"
         )
-    raise NotImplementedError(
-        "M0 -- owner: Sumedha -- OxIOD access-check passes, but the on-disk parser "
-        "still needs a real downloaded file to verify the schema against"
-    )
+
+    dataset_root = root
+    nested = root / "Oxford Inertial Odometry Dataset"
+    if nested.is_dir():
+        dataset_root = nested
+
+    positions = carry_positions if carry_positions is not None else list(_OXIOD_CARRY_POSITIONS)
+
+    recordings: list[Recording] = []
+    for position_name in positions:
+        position_dir = dataset_root / position_name
+        if not position_dir.is_dir():
+            continue
+        carry_position = _OXIOD_CARRY_POSITIONS.get(position_name, CarryPosition.UNKNOWN)
+        for data_dir in sorted(position_dir.glob("data*")):
+            syn_dir = data_dir / "syn"
+            if not syn_dir.is_dir():
+                continue
+            for imu_path in sorted(syn_dir.glob("imu*.csv")):
+                vi_path = syn_dir / f"vi{imu_path.stem.removeprefix('imu')}.csv"
+                if not vi_path.is_file():
+                    continue
+                recordings.append(_load_oxiod_trial(imu_path, vi_path, carry_position))
+
+    return recordings
 
 
 def load_own_recording(path: Path) -> Recording:

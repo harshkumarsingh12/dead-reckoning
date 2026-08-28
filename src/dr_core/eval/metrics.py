@@ -165,5 +165,13 @@ def calibration_coverage(errors: Array, sigmas: Array, k: float = 1.0) -> float:
     is over-confident, which silently poisons fusion and makes the on-screen ellipse
     indefensible; materially above means it is under-confident and the filter is
     ignoring information it has.
+
+    ``errors`` and ``sigmas`` are one axis at a time (call twice for a 2D velocity,
+    once per axis, per the docstring above) -- ``errors[i]`` is the signed residual
+    for sample ``i`` and ``sigmas[i]`` is the model's claimed 1-sigma for that same
+    sample, so shapes must match elementwise.
     """
-    raise NotImplementedError("M2 -- owner: Sumedha")
+    errors = np.asarray(errors, dtype=np.float64)
+    sigmas = np.asarray(sigmas, dtype=np.float64)
+    inside = np.abs(errors) <= (k * sigmas)
+    return float(np.mean(inside))

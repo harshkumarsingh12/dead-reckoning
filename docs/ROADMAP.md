@@ -66,13 +66,13 @@ without corrupting heading.
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Causal TCN with a Gaussian-NLL covariance head | Sumedha | ✅ Done (code) — untrained, see note |
-| Random-yaw augmentation | Sumedha | ✅ Done (code) — carry-position mixing needs OxIOD, folded into the blocked row below |
-| ONNX export, int8, benchmarked | Sumedha | ✅ Done (code) — real latency number needs a real trained model |
-| Calibration coverage test wired into the harness | Sumedha, Sikruti | ✅ Done (code) — `dr_core.eval.metrics.calibration_coverage`, unverified on real predictions |
-| Model-only trajectory baseline (`ModelOnlyIntegrator`) | Sumedha | ✅ Done (code) — not yet wired into `dr-eval`/`scripts/run_eval.py` (Sikruti's area) |
+| Causal TCN with a Gaussian-NLL covariance head | Sumedha | ✅ Done — trained (epoch 113, seed 26168, OxIOD handheld+pocket) |
+| Random-yaw augmentation | Sumedha | ✅ Done — used throughout the real training run |
+| ONNX export, int8, benchmarked | Sumedha | ✅ Done — real checkpoint exported, `models/tcn.onnx` (LFS), median 9.4–9.7 ms over 5 runs, under the 10 ms budget |
+| Calibration coverage test wired into the harness | Sumedha, Sikruti | ✅ Done (code), verified on real predictions — 0.53/0.56 (OxIOD), 0.29/0.42 (campus), below the ~0.68 target on both, see `docs/EVALUATION.md` |
+| Model-only trajectory baseline (`ModelOnlyIntegrator`) | Sumedha | ✅ Done (code), exercised for real by `scripts/evaluate_model.py` — not yet wired into `dr-eval`/`scripts/run_eval.py` (Sikruti's area) |
 | `prepare_window` / `resample_uniform` (shared training+live preprocessing) | Sumedha | ✅ Done — closes the "still open for M2" note above |
-| Training on RoNIN/OxIOD, fine-tuning on our own walks | Sumedha | Blocked — RoNIN/OxIOD access still pending (#14); `load_ronin`/`load_oxiod` are stubs beyond the access check, no real file to verify either schema against; `scripts/train.py` works end-to-end against our own recordings (`load_own_recording`) once any exist (#22, not yet recorded) |
+| Training on OxIOD, fine-tuning on our own walks | Sumedha | ✅ Trained on real OxIOD (8.55 h). Our own campus recordings (20 sessions, Sensor Logger) are evaluated held-out but **not yet folded into training** — a resume attempt hit a validation-set-mismatch bug (fixed in #80, unreviewed) before it could be re-run; RoNIN remains untried (`load_ronin` is still an access-check-only stub, #14) |
 
 **Done when:** model-only integration beats PDR on held-out data **and** coverage is
 calibrated at roughly 68% within 1σ **and** inference is under budget.
@@ -80,13 +80,16 @@ calibrated at roughly 68% within 1σ **and** inference is under budget.
 > Export to ONNX on the first checkpoint that trains at all, not at the end. It de-risks
 > on-device inference and turns the latency claim into a measured number.
 
-> The full pipeline (model, loss, augmentation, shared preprocessing, ONNX export,
-> latency benchmark, calibration coverage, model-only trajectory baseline) is
-> implemented and unit-tested against synthetic data, and `scripts/train.py` has been
-> smoke-tested end to end against synthetic own-recording sessions. What is NOT done is
-> training on anything real and therefore any of the "done when" numbers above — no
-> RoNIN/OxIOD access and no own recordings exist yet in this environment. Those numbers
-> are not claimed until actually measured (AGENTS.md: "do not invent numbers").
+> **Real, measured results (2026-08-29, checkpoint epoch 113):** on OxIOD's own held-out
+> trials, model-only integration clearly beats PDR — 0.57% mean drift vs PDR's 9.21%,
+> winning 6/6 recordings. On our own held-out campus recordings (a domain the model never
+> trained on), it beats PDR on 6/9, with the one recording long enough for drift-% to be a
+> meaningful metric (`block_C`, 330.8 m) won clearly: 28.0% vs PDR's 70.9%. Inference is
+> under the 10 ms budget for real, on the target laptop. Calibration coverage is measured
+> but under the ~0.68 target on both domains (overconfident, more so out-of-domain). Full
+> numbers, config, and honesty notes: `docs/EVALUATION.md`. Not claimed: single-digit
+> drift on our own real-world data, or calibration at target on either domain — see that
+> doc's "Not claimed" line (AGENTS.md: "do not invent numbers").
 
 ---
 

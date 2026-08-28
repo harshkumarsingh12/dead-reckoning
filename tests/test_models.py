@@ -82,7 +82,6 @@ def test_random_yaw_augmentation_preserves_speed() -> None:
     assert not np.allclose(t2, target)
 
 
-@pytest.mark.xfail(reason="M2 -- ONNX runtime unimplemented (owner: Sumedha)", strict=True)
 def test_inference_fits_the_stated_budget() -> None:
     """Guards a number we say out loud on stage.
 

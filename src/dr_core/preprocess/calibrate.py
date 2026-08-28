@@ -8,17 +8,30 @@ the training and live paths import these exact functions.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 if TYPE_CHECKING:
-    import numpy as np
     import numpy.typing as npt
 
     from dr_core.types import ImuSample
 
     Vec3 = npt.NDArray[np.float64]
     Mat3 = npt.NDArray[np.float64]
+
+
+def expected_dip_from_latitude(lat_deg: float) -> float:
+    """Expected magnetic dip (inclination), radians, from latitude -- dipole approximation.
+
+    Uses the geocentric-dipole relation ``tan(dip) = 2 * tan(latitude)``. This is an
+    APPROXIMATION good to a few degrees; the real field departs from it, and a precise
+    value would come from a WMM/IGRF lookup (out of scope here). It exists to give the
+    magnetometer gate a sane expected dip instead of 0.
+    """
+    return math.atan(2.0 * math.tan(math.radians(lat_deg)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +45,41 @@ class CalibrationResult:
     expected_field_strength_t: float = 50e-6  # local geomagnetic magnitude
     expected_dip_rad: float = 0.0  # local inclination
     stationary_samples: int = 0
+
+    @classmethod
+    def for_session(
+        cls,
+        *,
+        latitude_deg: float,
+        expected_dip_rad: float | None = None,
+        expected_field_strength_t: float = 50e-6,
+        gyro_bias_body: Vec3 | None = None,
+        accel_bias_body: Vec3 | None = None,
+        mag_hard_iron_body: Vec3 | None = None,
+    ) -> CalibrationResult:
+        """Build a session calibration with a real expected magnetic dip.
+
+        The dip is taken from ``expected_dip_rad`` when given (e.g. a measured value),
+        otherwise derived from ``latitude_deg`` via ``expected_dip_from_latitude``. This
+        is what stops the mag gate from defaulting to an expected dip of 0 and rejecting
+        every clean field (issue #59).
+
+        PARTIAL RESULT: only the dip is real here. The gyro/accel/hard-iron biases
+        default to zeros -- placeholders until ``estimate_gyro_bias`` and ``fit_hard_iron``
+        are implemented. Do not treat the result as a fully calibrated session.
+        """
+        dip = (
+            expected_dip_rad
+            if expected_dip_rad is not None
+            else expected_dip_from_latitude(latitude_deg)
+        )
+        return cls(
+            gyro_bias_body=np.zeros(3) if gyro_bias_body is None else gyro_bias_body,
+            accel_bias_body=np.zeros(3) if accel_bias_body is None else accel_bias_body,
+            mag_hard_iron_body=np.zeros(3) if mag_hard_iron_body is None else mag_hard_iron_body,
+            expected_field_strength_t=expected_field_strength_t,
+            expected_dip_rad=dip,
+        )
 
 
 def estimate_gyro_bias(samples: list[ImuSample]) -> Vec3:

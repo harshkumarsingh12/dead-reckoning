@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dr-core"
 version = "0.1.0"
-description = "GPS-denied pedestrian dead reckoning — shared core (Theme: Space Technology)"
+description = "GPS-denied pedestrian dead reckoning — shared core (Theme: Transportation & Logistics)"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Dead Reckoning Team" }]

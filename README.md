@@ -1,6 +1,6 @@
 # Dead reckoning without GPS
 
-**Smart India Hackathon 2026 · Theme: Space Technology · Problem Statement: GPS-Denied Pedestrian Dead Reckoning**
+**Smart India Hackathon 2026 · Theme: Transportation & Logistics · Problem Statement: GPS-Denied Pedestrian Dead Reckoning**
 
 Keeping an accurate position estimate when the satellites are gone — in a tunnel, in a
 basement, in an urban canyon — using nothing but the phone already in your pocket.

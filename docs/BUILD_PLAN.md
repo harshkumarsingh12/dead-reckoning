@@ -1,5 +1,5 @@
 # Build Plan v2
-## GPS-Denied Pedestrian Dead Reckoning (Theme: Space Technology)
+## GPS-Denied Pedestrian Dead Reckoning (Theme: Transportation & Logistics)
 ### Integrated: original plan + principal engineering review (27 Aug 2026)
 
 ---

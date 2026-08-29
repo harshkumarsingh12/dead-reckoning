@@ -199,6 +199,8 @@ class Hub:
             distance_travelled_m=self._distance_m,
             zupt_active=zupt_active,
             zaru_active=zaru_active,
+            nis=self._eskf.nis,
+            nis_bounds=self._eskf.nis_bounds,
             origin_lat_deg=self._origin_deg[0] if self._origin_deg is not None else None,
             origin_lon_deg=self._origin_deg[1] if self._origin_deg is not None else None,
         )

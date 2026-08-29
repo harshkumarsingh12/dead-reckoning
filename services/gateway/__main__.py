@@ -30,10 +30,24 @@ def main() -> None:
         default=None,
         help="directory of dr-eval report.json/plot output, served at /reports",
     )
+    parser.add_argument(
+        "--record-dir",
+        type=Path,
+        default=None,
+        help=(
+            "mirror every live session into <session_id>.jsonl.gz here "
+            "(dr_core.io.SessionWriter's format). Off by default."
+        ),
+    )
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
 
-    app = create_app(tiles_path=args.tiles, model_path=args.model, reports_dir=args.reports)
+    app = create_app(
+        tiles_path=args.tiles,
+        model_path=args.model,
+        reports_dir=args.reports,
+        record_dir=args.record_dir,
+    )
     uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
 
 

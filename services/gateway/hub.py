@@ -34,6 +34,16 @@ placeholder could never do (it hardcoded both).
   and ZARU/GPS course-over-ground are what keep heading from running away between
   corrections in the meantime. Replace with `AhrsFilter.heading_rad`-derived rate once
   live calibration exists.
+
+## Recording
+
+Everything above ran for a while with no way to get a walk back out again: a live
+session was never written anywhere, so no walk -- however good -- could become a
+golden run, an eval recording, or a surveyed-loop ground truth. When `record_dir` is
+given, the first `meta` message of a session opens a `dr_core.io.SessionWriter`
+mirroring every subsequent imu/gps/event message into it, so the exact bytes that
+drove the live demo are also sitting on disk afterward, ready for
+`scripts/run_eval.py` or curation into `data/golden/`.
 """
 
 from __future__ import annotations
@@ -46,13 +56,17 @@ import numpy as np
 
 from dr_core.fusion.eskf import Eskf
 from dr_core.fusion.zupt import StationaryDetector
+from dr_core.io.session import SessionWriter
 from dr_core.types import TelemetryFrame
 from services.gateway.wire import encode_telemetry_frame
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import numpy.typing as npt
 
-    from dr_core.types import GpsFix, ImuSample
+    from dr_core.io.session import SessionEvent
+    from dr_core.types import GpsFix, ImuSample, SessionMeta
 
 _QUEUE_MAXSIZE = 64
 
@@ -60,7 +74,7 @@ _QUEUE_MAXSIZE = 64
 class Hub:
     """One instance per running app. Owns the Eskf, the GPS toggle, and the /live fan-out."""
 
-    def __init__(self, imu_rate_hz: float = 200.0) -> None:
+    def __init__(self, imu_rate_hz: float = 200.0, record_dir: Path | None = None) -> None:
         self._subscribers: set[asyncio.Queue[dict[str, object]]] = set()
         self.gps_enabled = True
 
@@ -70,6 +84,10 @@ class Hub:
         self._origin_deg: tuple[float, float] | None = None
         self._last_p_world: npt.NDArray[np.float64] | None = None
         self._distance_m = 0.0
+
+        self._record_dir = record_dir
+        self._writer: SessionWriter | None = None
+        self._recording_session_id: str | None = None
 
     async def subscribe(self) -> asyncio.Queue[dict[str, object]]:
         queue: asyncio.Queue[dict[str, object]] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
@@ -82,6 +100,44 @@ class Hub:
     def set_gps_enabled(self, enabled: bool) -> None:
         self.gps_enabled = enabled
 
+    def on_meta(self, meta: SessionMeta) -> None:
+        """First message of a session -- opens the recording file, if enabled.
+
+        `StreamClient.kt` resends this SAME message (same session_id) on every
+        reconnect -- a hotspot hiccup is exactly the kind of thing a real walk hits at
+        least once, and `/ingest` gets an entirely new websocket handler invocation
+        each time. Reopening the file here on a matching session_id would call
+        `gzip.open(path, "wt")` again, which TRUNCATES -- silently destroying every
+        sample recorded before the hiccup. So: same session_id as the writer already
+        open -> no-op, keep recording into the same file. Only a genuinely different
+        session_id (a real new session) closes the old writer and opens a new one.
+        """
+        if self._writer is not None and self._recording_session_id == meta.session_id:
+            return
+        self.close_recording()
+        if self._record_dir is not None:
+            self._record_dir.mkdir(parents=True, exist_ok=True)
+            path = self._record_dir / f"{meta.session_id}.jsonl.gz"
+            self._writer = SessionWriter(path, meta)
+            self._writer.__enter__()
+            self._recording_session_id = meta.session_id
+
+    def on_event(self, event: SessionEvent) -> None:
+        """A calibration or demo marker -- recorded if a session is open, otherwise dropped.
+
+        Nothing in the live path consumes these yet (see the module docstring's "not
+        wired" list) -- this exists so they survive into the recording, where offline
+        calibration and replay can use them.
+        """
+        if self._writer is not None:
+            self._writer.write_event(event.t_ns, event.name, event.payload)
+
+    def close_recording(self) -> None:
+        """Flush and close the current recording, if one is open. Idempotent."""
+        if self._writer is not None:
+            self._writer.__exit__(None, None, None)
+            self._writer = None
+
     async def on_imu(self, sample: ImuSample) -> None:
         """Every accelerometer/gyroscope/magnetometer tick, combined on the phone.
 
@@ -89,6 +145,9 @@ class Hub:
         verdict fires both ZUPT (velocity is exactly zero) and ZARU (angular rate is
         exactly zero, pinning gyro bias) -- physics-based, independent of any model.
         """
+        if self._writer is not None:
+            self._writer.write_imu(sample)
+
         self._eskf.set_gps_enabled(self.gps_enabled)
         yaw_rate = float(sample.w_body[2])  # approximation -- see module docstring
         self._eskf.predict(sample.t_ns, yaw_rate)
@@ -109,6 +168,9 @@ class Hub:
         and this is also what gives the filter's clock a starting value on a
         GPS-only session with no IMU ticks at all.
         """
+        if self._writer is not None:
+            self._writer.write_gps(fix)
+
         if self._origin_deg is None:
             self._origin_deg = (fix.lat_deg, fix.lon_deg)
 

@@ -96,7 +96,36 @@ its own history.
 
 | Date | Tag | Loop | Config | Drift % | ATE (m) | RTE 60 s (m) | Coverage @1σ | NIS OK | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| — | — | — | — | — | — | — | — | — | *first row lands at M1* |
+| 2026-08-29 | M2-v1 | OxIOD held-out, 6 trials (handheld+pocket) | `tcn.pt` epoch 113, seed 26168 | 0.57 mean / 0.49 median | 2.09 | 2.91 | x=0.53 y=0.56 | n/a (model-only) | PDR on the same 6: drift 9.21% mean, ATE 15.51 m, RTE 15.81 m. Model beats PDR 6/6. `reports/m2_eval_epoch113.json`. |
+| 2026-08-29 | M2-v1 | Our own campus recordings, all held-out, 9 (GPS-quality-filtered from 21) | same checkpoint -- **no campus data in this training run** | 73.83 mean / 77.42 median | 14.10 | 7.81 | x=0.29 y=0.42 | n/a (model-only) | PDR: drift 87.19% mean, ATE 9.79 m, RTE 9.42 m. Model beats PDR 6/9; the one substantial walk (`block_C`, 330.8 m) is the clearest signal: model 28.0% vs PDR 70.9%. Most excluded recordings were short (<60 m) with a poor origin GPS fix (>30 m accuracy) -- see `scripts/evaluate_model.py --max-origin-gps-accuracy-m`. `reports/m2_eval_campus_all.json`. |
+
+### M2-v1, in plain terms
+
+Trained on OxIOD (handheld + pocket) only -- the training run intended to also include our
+own campus recordings hit a data-loading issue on the training machine and was not
+re-run before this snapshot; see `docs/ROADMAP.md` for the current plan on that.
+
+- **On OxIOD's own held-out trials** (data from the same source as most of training):
+  model-only integration clearly beats PDR -- 0.57% mean drift vs PDR's 9.21%, model
+  wins all 6/6 recordings. Calibration coverage (0.53 / 0.56) is close to the ~0.68
+  target but on the overconfident side, not yet there.
+- **On our own campus recordings** (a domain the model never trained on at all): model
+  beats PDR on 6 of 9 held-out recordings. The headline drift-% numbers (73.83% mean)
+  look worse than the "<5%" target, but that average is dominated by very short walks
+  (most under 60 m) where drift-% is a noisy metric regardless of which method is used
+  -- PDR does just as badly on the same short recordings (87.19% mean). The one walk
+  long enough for the metric to be meaningful (`block_C`, 330.8 m) shows the model
+  winning clearly: 28.0% vs PDR's 70.9%. Calibration (0.29 / 0.42) is further from
+  target here, consistent with evaluating on a domain the model never saw in training.
+- **Latency**: exported to ONNX (int8) and benchmarked on the actual laptop this repo's
+  budget target refers to (not the Colab GPU training machine) -- median **9.4-9.7 ms**
+  across 5 repeated runs of 300 iterations each, consistently under the 10 ms budget
+  but with a thinner margin than the architecture's first (untrained-weights) benchmark
+  suggested. `pytest -m ml -k budget` passes for real against the committed
+  `models/tcn.onnx`.
+- **Not claimed:** a single-digit-percent drift number on our own real-world data, or
+  calibration at the 0.68 target on either domain. Both are honest gaps, not hidden
+  ones -- see `docs/ROADMAP.md`'s M2 table for what's open and why.
 
 ---
 

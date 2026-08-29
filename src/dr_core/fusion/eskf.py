@@ -430,3 +430,13 @@ class Eskf:
     def set_gps_enabled(self, enabled: bool) -> None:
         """The demo's GPS-off toggle. Freezes the scale state when disabled."""
         self._gps_enabled = enabled
+
+    @property
+    def nis(self) -> dict[str, float]:
+        """Latest per-channel NIS, for the telemetry strip's live consistency check."""
+        return self._nis_logger.snapshot()
+
+    @property
+    def nis_bounds(self) -> dict[str, tuple[float, float]]:
+        """Chi-square bounds per channel, for the same strip."""
+        return self._nis_logger.bounds()

@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from dr_core.io.session import SessionReader
 from services.gateway import create_app
 
 # A GPS fix carrying a deliberately distinctive t_ns, so a restamped value cannot be
@@ -155,6 +156,115 @@ def test_stationary_imu_ticks_fire_zupt_and_zaru() -> None:
     assert frame is not None
     assert frame["zupt_active"] is True
     assert frame["zaru_active"] is True
+
+
+def _meta(session_id: str) -> dict[str, object]:
+    return {
+        "type": "meta",
+        "session_id": session_id,
+        "device_model": "Pixel 7",
+        "carry_position": "hand",
+        "imu_rate_hz": 200,
+        "boot_to_utc_offset_ns": 0,
+    }
+
+
+def test_recording_survives_a_disconnect_and_closes_on_shutdown(tmp_path: Path) -> None:
+    """The actual scenario this exists for: a live walk becomes a replayable file."""
+    record_dir = tmp_path / "recordings"
+    with (
+        TestClient(create_app(record_dir=record_dir)) as client,
+        client.websocket_connect("/ingest") as ingest_ws,
+    ):
+        ingest_ws.send_json(_meta("walk-1"))
+        ingest_ws.send_json(
+            {
+                "type": "imu",
+                "t_ns": 1_000_000_000,
+                "a": [0.0, 0.0, 9.81],
+                "w": [0.0, 0.0, 0.0],
+                "m": None,
+            }
+        )
+        ingest_ws.send_json({"type": "event", "t_ns": 1_000_000_500, "name": "tap"})
+        ingest_ws.send_json(
+            {
+                "type": "gps",
+                "t_ns": 1_000_001_000,
+                "lat_deg": 20.3535,
+                "lon_deg": 85.8164,
+                "accuracy_m": 5.0,
+            }
+        )
+    # TestClient's context exit triggers the ASGI lifespan shutdown, which is what
+    # actually closes (and properly gzip-trailers) the file -- not the websocket
+    # disconnect above, which must NOT close it (see the next test for why).
+    reader = SessionReader(record_dir / "walk-1.jsonl.gz")
+    assert reader.meta.session_id == "walk-1"
+    assert [record_type for record_type, _ in reader] == ["imu", "event", "gps"]
+
+
+def test_a_reconnect_with_the_same_session_id_does_not_truncate_the_recording(
+    tmp_path: Path,
+) -> None:
+    """StreamClient.kt resends the SAME meta message on every hotspot reconnect.
+
+    Naively reopening the file on a matching session_id would gzip.open(..., "wt")
+    again -- which truncates -- silently destroying everything recorded before the
+    hiccup. This is the actual bug this test exists to pin."""
+    record_dir = tmp_path / "recordings"
+    app = create_app(record_dir=record_dir)
+    with TestClient(app) as client:
+        with client.websocket_connect("/ingest") as first_ws:
+            first_ws.send_json(_meta("walk-2"))
+            first_ws.send_json(
+                {"type": "imu", "t_ns": 1, "a": [0.0, 0.0, 9.81], "w": [0.0, 0.0, 0.0], "m": None}
+            )
+        # Simulated hotspot hiccup: the socket above closed, the phone reconnects with
+        # a brand new websocket and resends the identical meta.
+        with client.websocket_connect("/ingest") as second_ws:
+            second_ws.send_json(_meta("walk-2"))
+            second_ws.send_json(
+                {"type": "imu", "t_ns": 2, "a": [0.0, 0.0, 9.81], "w": [0.0, 0.0, 0.0], "m": None}
+            )
+    reader = SessionReader(record_dir / "walk-2.jsonl.gz")
+    imu_timestamps = [payload.t_ns for record_type, payload in reader if record_type == "imu"]
+    assert imu_timestamps == [1, 2]  # both ticks survived the reconnect
+
+
+def test_a_new_session_id_closes_the_previous_recording_and_starts_a_fresh_one(
+    tmp_path: Path,
+) -> None:
+    record_dir = tmp_path / "recordings"
+    app = create_app(record_dir=record_dir)
+    with TestClient(app) as client:
+        with client.websocket_connect("/ingest") as first_ws:
+            first_ws.send_json(_meta("walk-a"))
+            first_ws.send_json(
+                {"type": "imu", "t_ns": 1, "a": [0.0, 0.0, 9.81], "w": [0.0, 0.0, 0.0], "m": None}
+            )
+        with client.websocket_connect("/ingest") as second_ws:
+            second_ws.send_json(_meta("walk-b"))
+            second_ws.send_json(
+                {"type": "imu", "t_ns": 2, "a": [0.0, 0.0, 9.81], "w": [0.0, 0.0, 0.0], "m": None}
+            )
+    # walk-a's file must already be a complete, independently-readable gzip stream --
+    # closed when walk-b's meta arrived, not just at final process shutdown.
+    reader_a = SessionReader(record_dir / "walk-a.jsonl.gz")
+    assert [payload.t_ns for _, payload in reader_a] == [1]
+    reader_b = SessionReader(record_dir / "walk-b.jsonl.gz")
+    assert [payload.t_ns for _, payload in reader_b] == [2]
+
+
+def test_no_record_dir_means_no_recording_and_no_crash() -> None:
+    """meta/event used to be a silent no-op case; confirm the real handlers behave
+    the same way (nothing written, nothing raised) when recording is off."""
+    with (
+        TestClient(create_app()) as client,
+        client.websocket_connect("/ingest") as ingest_ws,
+    ):
+        ingest_ws.send_json(_meta("walk-3"))
+        ingest_ws.send_json({"type": "event", "t_ns": 1, "name": "tap"})
 
 
 def test_replay_501s_until_a_golden_run_exists() -> None:

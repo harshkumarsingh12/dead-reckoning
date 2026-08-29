@@ -24,6 +24,7 @@ still 501s: it needs a recorded golden run that does not exist yet (#37).
 from __future__ import annotations
 
 import sqlite3
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -33,9 +34,10 @@ from dr_core import __version__
 from services.gateway.hub import Hub
 from services.gateway.reports import content_type_for, resolve_report_file
 from services.gateway.tiles import xyz_to_tms_row
-from services.gateway.wire import decode_gps, decode_imu
+from services.gateway.wire import decode_event, decode_gps, decode_imu, decode_meta
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
     from pathlib import Path
 
 # Binds every interface on purpose: the phone reaches the laptop over its own
@@ -48,6 +50,7 @@ def create_app(
     tiles_path: Path | None = None,
     model_path: Path | None = None,
     reports_dir: Path | None = None,
+    record_dir: Path | None = None,
 ) -> FastAPI:
     """Build the app.
 
@@ -58,13 +61,30 @@ def create_app(
         model_path: ONNX velocity model. None runs baselines only.
         reports_dir: directory `generate_report` writes ``<run_id>/`` subfolders into.
             None disables the ``/reports`` route.
+        record_dir: directory every live session gets mirrored into as it streams,
+            named ``<session_id>.jsonl.gz`` (dr_core.io.SessionWriter's format). None
+            disables recording entirely -- the default, so tests and casual runs don't
+            silently leave files behind.
     """
+    hub = Hub(record_dir=record_dir)
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        # Ordinary websocket disconnects deliberately do NOT close the recording (see
+        # _register_ingest) since a hotspot hiccup looks identical to one on the wire.
+        # A graceful shutdown (Ctrl+C ending the demo) is the one signal this process
+        # actually gets that the session is really over, so it's the one place the
+        # gzip stream gets its proper close -- otherwise the file is missing its final
+        # block and trailer, and a later SessionReader open raises EOFError.
+        hub.close_recording()
+
     app = FastAPI(
         title="SIH26168 dead-reckoning gateway",
         version=__version__,
         docs_url="/docs",
+        lifespan=_lifespan,
     )
-    hub = Hub()
 
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
@@ -111,10 +131,19 @@ def _register_ingest(app: FastAPI, hub: Hub) -> None:
                         await hub.on_imu(decode_imu(raw))
                     case "gps":
                         await hub.on_gps(decode_gps(raw))
-                    case "meta" | "event":
-                        pass  # TODO(M1): session context, calibration markers
+                    case "meta":
+                        hub.on_meta(decode_meta(raw))
+                    case "event":
+                        hub.on_event(decode_event(raw))
         except WebSocketDisconnect:
             pass
+        # Deliberately NOT closing the recording here. There is no "session ended"
+        # message in the wire protocol -- a disconnect means exactly the same thing
+        # whether it's a hotspot hiccup mid-walk (StreamClient.kt reconnects with a
+        # fresh websocket in 500ms and resends the SAME meta) or the actual end of the
+        # walk. Closing on every disconnect would truncate the file on every hiccup;
+        # see Hub.on_meta's docstring. The recording closes when a genuinely new
+        # session_id arrives, or the process shuts down gracefully (below).
 
 
 def _register_live(app: FastAPI, hub: Hub) -> None:

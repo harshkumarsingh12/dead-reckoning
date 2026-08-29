@@ -26,7 +26,30 @@ from typing import Any
 
 import numpy as np
 
-from dr_core.types import GpsFix, ImuSample, TelemetryFrame
+from dr_core.io.session import SessionEvent
+from dr_core.types import CarryPosition, GpsFix, ImuSample, SessionMeta, TelemetryFrame
+
+
+def decode_meta(raw: dict[str, Any]) -> SessionMeta:
+    """Parse the first `{"type": "meta", ...}` /ingest message of a session.
+
+    Per APP.md's wire format, the app sends session_id/device_model/carry_position/
+    imu_rate_hz/boot_to_utc_offset_ns -- everything else on SessionMeta (origin,
+    calibration biases) is filled in OFFLINE from the recording, not sent live, and
+    stays at its dataclass default here.
+    """
+    return SessionMeta(
+        session_id=str(raw["session_id"]),
+        device_model=str(raw["device_model"]),
+        carry_position=CarryPosition(raw.get("carry_position", CarryPosition.UNKNOWN.value)),
+        imu_rate_hz=float(raw.get("imu_rate_hz", 200.0)),
+        boot_to_utc_offset_ns=int(raw.get("boot_to_utc_offset_ns", 0)),
+    )
+
+
+def decode_event(raw: dict[str, Any]) -> SessionEvent:
+    """Parse one `{"type": "event", ...}` /ingest message -- calibration/demo markers."""
+    return SessionEvent(t_ns=int(raw["t_ns"]), name=str(raw["name"]), payload=raw.get("payload"))
 
 
 def decode_imu(raw: dict[str, Any]) -> ImuSample:

@@ -36,11 +36,48 @@ everything still works. That is a property of the build, not a hope.
       Re-verify with the laptop's Wi-Fi *physically* off before the actual event —
       this check proves no code path reaches the internet, not that Wi-Fi hardware
       being on couldn't matter for some other reason.
-- [ ] **This is the KIIT campus practice loop, not necessarily the SIH grand-finale
-      venue.** Rebuild with the real venue's bounding box once announced, using the
-      same command above with the venue's coordinates.
+- [x] **Today's venue: KIIT Campus 25 (the CS campus).** Built from four real on-site
+      GPS points (not a guess -- a web search for "KIIT Campus 25" turned up three
+      disagreeing campus numbers for CS across informal sources, so this is the actual
+      ground truth, not a lookup):
+      ```
+      python scripts/make_tiles.py --bbox 85.814355,20.362014,85.819725,20.367192 \
+          --zoom 14-19 --out tiles/campus25_loop.mbtiles
+      ```
+      123 tiles, zoom 14-19, 0.4 MB, 0 failed fetches.
+      **SHA-256:** `39b653fa107e49f316c41f5e26ee17d525b02bbf351b94dfc27637b83e76117c`
+      Verified against a real gateway on a spare port: real geography rendered (IT
+      Park Road, Chandaka, Bhubaneswar), not a blank or wrong-location tile. Not
+      committed (gitignored by design) -- same team-drive-sharing note as the KIIT
+      practice loop below applies.
+      Whether this is also the eventual SIH grand-finale venue, or only today's
+      internal round, is not confirmed -- rebuild again if the grand-finale venue
+      turns out to differ.
+- [x] Build the offline tiles for the KIIT campus practice loop (kept as a fallback,
+      superseded by today's real venue above):
+      ```
+      python scripts/make_tiles.py --bbox 85.810,20.348,85.824,20.360 --zoom 14-19 \
+          --out tiles/kiit_campus.mbtiles
+      ```
+      582 tiles, zoom 14-19, 2.3 MB, 0 failed fetches.
+      **SHA-256:** `51020e306578ecfffbec784c445a384fdee70654e68f1f50dfb09489a11fee8a`
+      Not committed (gitignored by design, see `.gitattributes`) — share this exact
+      file over the team drive rather than rebuilding it per machine, since OSM's
+      tile content can drift between fetches and the checksum above is a fingerprint
+      of *this* build, not of the bbox/zoom in general.
+- [x] **Verified with a real gateway serving these tiles and zero non-localhost
+      network requests observed in the browser** (checked via Playwright's request
+      log, not just visual inspection) — real road names and buildings rendered
+      (KIIT Road, KIIT Campus 3/6, NIFT hostels), dot correctly placed on KIIT Road.
+      Re-verify with the laptop's Wi-Fi *physically* off before the actual event —
+      this check proves no code path reaches the internet, not that Wi-Fi hardware
+      being on couldn't matter for some other reason.
 - [ ] Record the golden run on the actual demo loop, with the full calibration ritual
-      and a clean GPS-off toggle. Commit it under `data/golden/`.
+      and a clean GPS-off toggle. Commit it under `data/golden/`. Now actually
+      possible end to end: `--record-dir` on the gateway mirrors the live walk to a
+      real `SessionWriter` file as it streams (see `services/gateway/hub.py`) --
+      point it at a scratch directory during the walk, then copy the good one into
+      `data/golden/` afterward.
 - [ ] Survey the demo loop: measure the corners, mark the start on the floor. Those
       measurements are the ground truth behind the number you will quote.
 
@@ -56,7 +93,12 @@ everything still works. That is a property of the build, not a hope.
 ## T-minus one hour
 
 - [ ] Laptop Wi-Fi **off**. Phone hotspot on. Laptop joined to the hotspot.
-- [ ] `python -m services.gateway --tiles tiles/kiit.mbtiles --model models/tcn.onnx`
+- [ ] `python -m services.gateway --tiles tiles/campus25_loop.mbtiles --model models/tcn.onnx --record-dir data/own/live`
+      `--record-dir` is what turns today's walk into a real recording -- without it,
+      nothing survives the walk (see `services/gateway/hub.py`). `--model` only
+      affects `model_loaded` in `/healthz` right now -- the live path doesn't call the
+      model yet (learned-velocity update still not wired into `Hub`), so don't expect
+      it to change what the dot does today.
 - [ ] `curl http://127.0.0.1:8000/healthz` → `tiles_loaded: true`, `model_loaded: true`.
       Do not skip this. It is the difference between finding out now and finding out on
       stage.

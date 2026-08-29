@@ -61,9 +61,15 @@ jobs:
     name: No large files
     runs-on: ubuntu-latest
     steps:
+      # lfs: true so `wc -c` below measures a real LFS-tracked file's actual size
+      # (e.g. models/tcn.onnx), not the ~130-byte pointer stub a plain checkout
+      # leaves on disk. Without this, the guard is blind to oversized content on
+      # any LFS-tracked path -- it would pass a huge file through unnoticed simply
+      # because LFS pointers are always tiny.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true
 
       # Recordings, tiles and checkpoints do not belong in git. Once a large blob is
       # committed it is in the history forever and every clone pays for it, so this

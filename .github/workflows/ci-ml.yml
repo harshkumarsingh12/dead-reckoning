@@ -26,7 +26,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      # models/tcn.onnx (+.onnx.data) are LFS-tracked (.gitattributes). Without
+      # lfs: true, checkout leaves the tiny pointer file on disk instead of the real
+      # binary, and onnxruntime fails to load it with an opaque "Protobuf parsing
+      # failed" -- not a missing-file error, so it looks like a corrupt model rather
+      # than an untouched checkout flag.
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: actions/setup-python@v5
         with:

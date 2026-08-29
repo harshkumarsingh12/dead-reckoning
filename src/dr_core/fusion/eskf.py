@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 def wrap_angle(rad: float) -> float:
     """Wrap angle to [-pi, pi)."""
-    return float((rad + np.pi) % (2.0 * np.pi) - np.pi)
+    return (rad + np.pi) % (2.0 * np.pi) - np.pi
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +56,8 @@ class EskfConfig:
     sigma_zaru: float = 0.005  # rad/s
     gate_level: float = 0.95  # chi-square level, every channel
     freeze_scale_without_gps: bool = True
+    velocity_cov_scale: float = 1.0  # covariance inflation multiplier (s_cov >= 1.0)
+    min_velocity_variance: float = 0.0  # (m/s)^2 minimum variance floor on diagonal of R
 
 
 class Eskf:
@@ -206,7 +208,10 @@ class Eskf:
             mat_h[0, 6] = 0.0
             mat_h[1, 6] = 0.0
 
-        mat_r = estimate.cov
+        mat_r = estimate.cov.copy() * self.config.velocity_cov_scale
+        if self.config.min_velocity_variance > 0.0:
+            mat_r[0, 0] = max(float(mat_r[0, 0]), self.config.min_velocity_variance)
+            mat_r[1, 1] = max(float(mat_r[1, 1]), self.config.min_velocity_variance)
         mat_s = mat_h @ self._P @ mat_h.T + mat_r
 
         accepted, nis = self._vel_gate.accept(y, mat_s)
@@ -221,7 +226,9 @@ class Eskf:
 
         # Joseph form covariance update
         mat_ikh = np.eye(ERROR_STATE_DIM, dtype=np.float64) - mat_k @ mat_h
-        self._P = mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T
+        self._P = np.asarray(
+            mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T, dtype=np.float64
+        )
 
         self._inject_and_reset(dx)
         self._heading_source = HeadingSource.VELOCITY
@@ -253,7 +260,9 @@ class Eskf:
         dx = mat_k @ y
 
         mat_ikh = np.eye(ERROR_STATE_DIM, dtype=np.float64) - mat_k @ mat_h
-        self._P = mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T
+        self._P = np.asarray(
+            mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T, dtype=np.float64
+        )
 
         self._inject_and_reset(dx)
         return True
@@ -276,10 +285,12 @@ class Eskf:
             return False
 
         mat_k = self._P @ mat_h.T @ np.linalg.inv(mat_s)
-        dx = (mat_k * y).flatten()
+        dx = np.asarray((mat_k * y).flatten(), dtype=np.float64)
 
         mat_ikh = np.eye(ERROR_STATE_DIM, dtype=np.float64) - mat_k @ mat_h
-        self._P = mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T
+        self._P = np.asarray(
+            mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T, dtype=np.float64
+        )
 
         self._inject_and_reset(dx)
         self._heading_source = HeadingSource.ZARU
@@ -302,10 +313,12 @@ class Eskf:
             return False
 
         mat_k = self._P @ mat_h.T @ np.linalg.inv(mat_s)
-        dx = (mat_k * y).flatten()
+        dx = np.asarray((mat_k * y).flatten(), dtype=np.float64)
 
         mat_ikh = np.eye(ERROR_STATE_DIM, dtype=np.float64) - mat_k @ mat_h
-        self._P = mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T
+        self._P = np.asarray(
+            mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T, dtype=np.float64
+        )
 
         self._inject_and_reset(dx)
         self._heading_source = HeadingSource.MAGNETOMETER
@@ -355,7 +368,9 @@ class Eskf:
         dx = mat_k @ y
 
         mat_ikh = np.eye(ERROR_STATE_DIM, dtype=np.float64) - mat_k @ mat_h
-        self._P = mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T
+        self._P = np.asarray(
+            mat_ikh @ self._P @ mat_ikh.T + mat_k @ mat_r @ mat_k.T, dtype=np.float64
+        )
 
         self._inject_and_reset(dx)
 
@@ -367,11 +382,12 @@ class Eskf:
             mat_r_course = np.array([[0.1**2]], dtype=np.float64)
             mat_s_course = mat_h_course @ self._P @ mat_h_course.T + mat_r_course
             mat_k_course = self._P @ mat_h_course.T @ np.linalg.inv(mat_s_course)
-            dx_course = (mat_k_course * y_course).flatten()
+            dx_course = np.asarray((mat_k_course * y_course).flatten(), dtype=np.float64)
             mat_ikh_course = np.eye(ERROR_STATE_DIM, dtype=np.float64) - mat_k_course @ mat_h_course
-            self._P = (
+            self._P = np.asarray(
                 mat_ikh_course @ self._P @ mat_ikh_course.T
-                + mat_k_course @ mat_r_course @ mat_k_course.T
+                + mat_k_course @ mat_r_course @ mat_k_course.T,
+                dtype=np.float64,
             )
             self._inject_and_reset(dx_course)
             self._heading_source = HeadingSource.GPS_COURSE
